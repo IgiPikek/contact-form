@@ -204,7 +204,6 @@ export async function init(csrf) {
     function submitResponse(tenantId, payload, csrf, authToken) {
         return fetch(`${tenantId}/message`, {
             method: `post`,
-            credentials: `include`,
             headers: {
                 "csrf-token": csrf,
                 "Authorization": authToken,

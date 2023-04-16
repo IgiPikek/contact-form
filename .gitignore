@@ -5,6 +5,7 @@ node_modules/
 
 /ssl/*
 /tenants/*
+/pending-tenants/*
 
 !.gitkeep
 

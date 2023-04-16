@@ -60,16 +60,11 @@ SodiumPlus.auto().then(async sodium => {
         next();
     });
 
-    app.use(({ method, hostname, url, session }, _, next) => {
-        console.log(method, hostname, url, `session: ${JSON.stringify(session.data)}`);
-        next();
-    });
 
 
     let tenants;
 
     const validateTenant = async (req, res, next) => {
-        console.log(`validate tenant`, req.params.tenantId);
         if (!tenants) {
             tenants = fs.readdirSync(`tenants`);
             console.log(`stored tenants from disk:`, tenants);
@@ -77,6 +72,8 @@ SodiumPlus.auto().then(async sodium => {
 
         const hashedTenant = (await sodium.crypto_generichash(req.params.tenantId.toLowerCase())).toString(`hex`);
         req._hashedTenant = hashedTenant;
+
+        console.log(`validate tenant`, req.params.tenantId, hashedTenant);
 
         if (!tenants.includes(hashedTenant)) return res.status(404).send();
 
@@ -107,12 +104,42 @@ SodiumPlus.auto().then(async sodium => {
         res.json(cryptoToken.toString(`hex`));
     });
 
+    app.get(`/new/:tenant`, async (req, res) => {
+        console.log(`/new/:tenant`, req.params.tenant);
+
+        const tenant = req.params.tenant;
+        const tenantHash = (await sodium.crypto_generichash(tenant)).toString(`hex`);
+
+        if (!fs.readdirSync(`pending-tenants`).includes(tenantHash)) {
+            return res.status(400).send();
+        }
+
+        res.render(`setup`, { tenant, csrf: req.csrfToken() });
+    });
+
+    app.post(`/new/:tenant`, async (req, res) => {
+        console.log(`post new`, req.body);
+
+        const tenant = req.params.tenant;
+        const tenantHash = (await sodium.crypto_generichash(tenant)).toString(`hex`);
+
+        if (!fs.readdirSync(`pending-tenants`).includes(tenantHash)) {
+            return res.status(400).send();
+        }
+
+        fs.writeFileSync(path.join(`tenants`, tenantHash, `key`, `publicKey.js`), `module.exports = "${req.body.pk}";\n`);
+        fs.rmSync(path.join(`pending-tenants`, tenantHash));
+
+        res.send(`/` + tenant);
+    });
+
 
     const tenant = route => `/:tenantId${route}`;
 
     app.get(tenant(`/`), validateTenant, (req, res) => {
         console.log(`:tenantId/`, req._hashedTenant);
 
+        // TODO do not render pending tenants. Trying to log into pending tenant throws error because public key doesn't exist yet.
         res.render(`index`, { tenant: req.params.tenantId, csrf: req.csrfToken() });
     });
 
