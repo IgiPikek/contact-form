@@ -6,6 +6,8 @@ const fs = require(`fs`);
 const path = require(`path`);
 const { SodiumPlus } = require(`sodium-plus`);
 
+const dataDir = path.join(__dirname, `data`);
+
 
 SodiumPlus.auto().then(async sodium => {
     const [cmd, ...args] = process.argv.slice(2);
@@ -52,13 +54,13 @@ const cmdCreate = {
         // TODO centralise hash(str.toLower). It's too easy to forget.
         const hashHex = (await sodium.crypto_generichash(tenant.toLowerCase())).toString(`hex`);
 
-        const tenantDir = path.join(`tenants`, hashHex);
+        const tenantDir = path.join(dataDir, `tenants`, hashHex);
 
         fs.mkdirSync(tenantDir);
         fs.mkdirSync(path.join(tenantDir, `key`));
         fs.mkdirSync(path.join(tenantDir, `entrypoints`));
 
-        fs.writeFileSync(path.join(`pending-tenants`, hashHex), ``);
+        fs.writeFileSync(path.join(dataDir, `pending-tenants`, hashHex), ``);
 
         console.log(`Created tenant '${tenant}' as ${hashHex}`);
     },
@@ -80,16 +82,16 @@ const cmdDelete = {
         // TODO centralise hash(str.toLower). It's too easy to forget.
         const hashHex = (await sodium.crypto_generichash(tenant.toLowerCase())).toString(`hex`);
 
-        const tenantDir = path.join(__dirname, `tenants`, hashHex);
+        const tenantDir = path.join(dataDir, `tenants`, hashHex);
 
         try {
             // If tenant is pending, there is no key file yet and `require` would fail.
             const tenantKey = require(path.join(tenantDir, `key`, `publicKey.js`));
-            fs.rmSync(path.join(`inter-tenant`, `conversations`, tenantKey), { recursive: true, force: true });
+            fs.rmSync(path.join(dataDir, `inter-tenant`, `conversations`, tenantKey), { recursive: true, force: true });
         } catch {
         }
 
-        fs.rmSync(path.join(`pending-tenants`, hashHex), { force: true });
+        fs.rmSync(path.join(dataDir, `pending-tenants`, hashHex), { force: true });
         fs.rmSync(tenantDir, { recursive: true, force: true });
 
         console.log(`Deleted tenant '${tenant}' (${hashHex})`);
@@ -102,8 +104,8 @@ const cmdList = {
     args: ``,
     desc: `Lists tenant hashes and their pending state.`,
     fn: () => {
-        const tenantsDir = `tenants`;
-        const pendingDir = `pending-tenants`;
+        const tenantsDir = path.join(dataDir, `tenants`);
+        const pendingDir = path.join(dataDir, `pending-tenants`);
 
         const tenantHashes = fs.readdirSync(tenantsDir);
         const pendingTenants = fs.readdirSync(pendingDir).filter(p => p !== `.gitkeep`);

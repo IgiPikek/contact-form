@@ -3,9 +3,7 @@
 node_modules/
 */lib/*
 
-/inter-tenant/*
-/tenants/*
-/pending-tenants/*
+data/
 
 !.gitkeep
 

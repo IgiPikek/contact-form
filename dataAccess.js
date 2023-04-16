@@ -23,8 +23,9 @@ const path = require(`path`);
 const { SodiumPlus } = require(`sodium-plus`);
 
 
+const dataDir = path.join(__dirname, `data`);
 const Dirs = {
-    Tenants: path.join(__dirname, `tenants`),
+    Tenants: path.join(dataDir, `tenants`),
     Tenant: tenantHash => path.join(Dirs.Tenants, tenantHash),
     TenantPublicKeyFile: tenantHash => path.join(Dirs.Tenant(tenantHash), `key`, `publicKey.js`),
     TenantEntrypoints: tenantHash => path.join(Dirs.Tenant(tenantHash), `entrypoints`),
@@ -34,16 +35,16 @@ const Dirs = {
     TenantEntrypointConversation: (tenantHash, entrypointHash, convoId) => path.join(Dirs.TenantEntrypointConversations(tenantHash, entrypointHash), convoId),
     TenantEntrypointMessage: (tenantHash, entrypointHash, convoId, messageHash) => path.join(Dirs.TenantEntrypointConversation(tenantHash, entrypointHash, convoId), messageHash),
 
-    PendingTenants: path.join(__dirname, `pending-tenants`),
+    PendingTenants: path.join(dataDir, `pending-tenants`),
     PendingTenant: tenantHash => path.join(Dirs.PendingTenants, tenantHash),
 
-    InterTenant: path.join(__dirname, `inter-tenant`),
-    InterTenantConvos: path.join(__dirname, `inter-tenant`, `conversations`),
+    InterTenant: path.join(dataDir, `inter-tenant`),
+    InterTenantConvos: path.join(dataDir, `inter-tenant`, `conversations`),
     InterTenantConvo: convoId => path.join(Dirs.InterTenantConvos, convoId),
     InterTenantMessage: (convoId, messageHash) => path.join(Dirs.InterTenantConvo(convoId), messageHash),
     InterTenantIdFile: convoId => path.join(Dirs.InterTenantConvo(convoId), `info.js`),
 
-    InstanceOwnerKeyFile: path.join(__dirname, `inter-tenant`, `owner.js`),
+    InstanceOwnerKeyFile: path.join(dataDir, `inter-tenant`, `owner.js`),
 
     Public: path.join(__dirname, `public`),
     Views: path.join(__dirname, `views`),
