@@ -85,6 +85,8 @@
 </form>
 
 <script type="module">
+    import { userKeys } from "/utils.js";
+
     const sodium = await SodiumPlus.auto();
 
     document.querySelector(`form`).addEventListener(`submit`, async e => {
@@ -104,7 +106,7 @@
         const pw1 = form.pw1.value;
         const msg = form.msg.value;
 
-        const keys = await userKeys(name, pw1);
+        const keys = await userKeys(sodium, name, pw1);
         const message = JSON.stringify({ name, msg });
         const nonce = await sodium.randombytes_buf(sodium.CRYPTO_BOX_NONCEBYTES);
         const instanceOwnerPk = X25519PublicKey.from(await sodium.sodium_hex2bin(`<%- instanceOwnerPk %>`));
@@ -134,26 +136,6 @@
 
         window.location.href = await res.text();
     });
-
-
-    // TODO this routine is used in app.js, too. Centralise.
-    async function userKeys(name, pw) {
-        const encoder = new TextEncoder();
-
-        const seed = encoder.encode(JSON.stringify({
-            name: name.trim().toLowerCase(),
-            pw,
-        }));
-        const clientKeyPair = await sodium.crypto_kx_seed_keypair(seed);
-        const clientPublic = await sodium.crypto_box_publickey(clientKeyPair);
-        const clientSecret = await sodium.crypto_box_secretkey(clientKeyPair);
-
-        return {
-            clientKeyPair,
-            clientPublic,
-            clientSecret,
-        };
-    }
 
 
     // Form validation
