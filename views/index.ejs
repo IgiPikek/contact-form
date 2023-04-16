@@ -6,6 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
     <style>
+        html {
+            font-family: sans-serif;
+        }
         .row {
             margin-bottom: 1em;
         }
@@ -162,11 +165,9 @@
 
     </template>
 
-    <template v-if="currentPage === 'login-captcha'">
-    </template>
-
     <template v-if="state.currentPage === 'messages' && state.admin">
         <h2>ADMIN PAGE</h2>
+        <!-- TODO keep conversation picker selected and refresh conversation -->
         <button @click="getMessages">Refresh</button>
         <button @click="goToPage('settings')">Settings</button>
         <div>
