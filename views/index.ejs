@@ -196,9 +196,9 @@
         <button @click="refresh">Refresh</button>
 
         <!-- threads, email style -->
-        <template v-for="convo in state.convos" :key="convo.id">
+        <template v-if="state.selectedConvo">
             <hr>
-            <Conversation :convo="convo" @reply="sendResponse"></Conversation>
+            <Conversation :convo="state.selectedConvo" @reply="sendResponse"></Conversation>
         </template>
     </template>
 

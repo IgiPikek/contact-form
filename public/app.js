@@ -59,7 +59,7 @@ export function getApp({ reactive }, sid) {
                     state.convos = (await this.getLatestMessages()).map(convo => ({ ...convo, stub: true }));
                 }
                 else if (page === `messages` && !state.admin) {
-                    state.convos = await this.getMessages(state.clientPublic.toString(`hex`));
+                    state.selectedConvo = await this.getConvo(state.clientPublic.toString(`hex`));
                 }
                 else if (page === `settings`) {
                     const epsRaw = await getEntrypoints(state.tenantPublic.toString(`hex`), state.authToken);
@@ -126,9 +126,15 @@ export function getApp({ reactive }, sid) {
                 return await Promise.all(convos.map(decryptConvo));
             },
 
-            async getMessages(convoId) {
-                const { json: convo } = await getJsonFromTenantWithSession(`convos/` + convoId, state.authToken);
-                return [await decryptConvo(convo)];
+            async getConvo(convoId, after) {
+                let url = `convos/` + convoId;
+
+                if (after) {
+                    url += `?after=${after}`;
+                }
+
+                const { json: convo } = await getJsonFromTenantWithSession(url, state.authToken);
+                return await decryptConvo(convo);
             },
 
             async sendResponse(convo, { text, attachment }, resetInput) {
@@ -167,13 +173,15 @@ export function getApp({ reactive }, sid) {
             async refresh() {
                 if (!state.selectedConvo) return;
 
-                const fullConvo = (await this.getMessages(state.selectedConvo.id))[0];
-                state.convos.splice(state.convos.findIndex(c => c.id === fullConvo.id), 1, fullConvo);
+                const latestMsg = state.selectedConvo.entries.reduce((latest, entry) => latest.time > entry.time ? latest : entry, { time: -1 });
+                const convoWithNewMessages = await this.getConvo(state.selectedConvo.id, latestMsg.time);
+
+                state.selectedConvo.entries.push(...convoWithNewMessages.entries);
             },
 
             async convoChanged(convo) {
                 if (convo.stub) {
-                    const fullConvo = (await this.getMessages(convo.id))[0];
+                    const fullConvo = await this.getConvo(convo.id);
                     state.selectedConvo = fullConvo;
                     state.convos.splice(state.convos.findIndex(c => c.id === fullConvo.id), 1, fullConvo);
                 } else {
@@ -223,14 +231,14 @@ export function getApp({ reactive }, sid) {
         const entrypoint = convo.epId && (await sodium.crypto_box_seal_open(await sodium.sodium_hex2bin(convo.epId), state.clientPublic, state.clientSecret)).toString(`utf8`);
         const epHash = entrypoint && (await sodium.crypto_generichash(entrypoint)).toString(`hex`);
 
-        return ({
+        return {
             id: convo.id,
             io: convo.io,
-            entries: (await decryptMessages(state.clientSecret, oppositePublic, convo.messages)).sort((a, b) => b.time - a.time),
+            entries: await decryptMessages(state.clientSecret, oppositePublic, convo.messages),
             fromTenant: state.instanceOwner && convo.ti && (await sodium.crypto_box_seal_open(await sodium.sodium_hex2bin(convo.ti), state.clientPublic, state.clientSecret)).toString(`utf8`),
             entrypoint,
             epHash,
-        });
+        };
     }
 
     async function decryptMessages(ownSecret, oppositePublic, messages) {

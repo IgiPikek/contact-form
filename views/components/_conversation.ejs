@@ -17,7 +17,7 @@
         </div>
         <!-- TODO sorting. to allow seamless reading flow from old-to-new and new-to-old -->
         <div class="entries">
-            <div class="entry" v-for="({ name, time, msg, attachment }) in convo.entries">
+            <div class="entry" v-for="({ name, time, msg, attachment }) in entriesLatestFirst">
                 <div class="meta"><strong>{{$root.isSelf(name) ? 'Me' : name}}</strong> at {{toUTCString(time)}}</div>
                 <div class="message" :class="{ self: $root.isSelf(name) }">
                     <div>{{msg}}</div>

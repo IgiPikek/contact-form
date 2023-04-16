@@ -97,6 +97,9 @@ export default {
         toUTCString: time => new Date(time).toUTCString(),
     },
     computed: {
+        entriesLatestFirst() {
+            return this.convo.entries.slice(0).sort((a, b) => b.time - a.time);
+        },
         replyBlocked() {
             return this.replyText.length === 0 && !this.attachment;
         },

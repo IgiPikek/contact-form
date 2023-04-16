@@ -218,32 +218,42 @@ SodiumPlus.auto().then(async sodium => {
         return res.json([...latestOfConvos, ...interTenant]);
     });
 
-    app.get(entrypoint(`/convos/:convoId`), requireSession, validateEntrypoint, withAuthRest, ({ _session, params, _hashedTenant, _hashedEntrypoint }, res) => {
+    app.get(entrypoint(`/convos/:convoId`), requireSession, validateEntrypoint, withAuthRest, ({ _session, params, query, _hashedTenant, _hashedEntrypoint }, res) => {
+        const { convoId } = params;
+        const after = parseInt(query.after) || 0;
+
         if (_session.admin) {
             const convosByEntrypoint = DataAccess.allTenantConvos(_hashedTenant);
-            const convos = convosByEntrypoint.flatMap(({ entrypointHash, epId, convos }) => convos.map(convoId => Conversation(
-                convoId,
-                DataAccess.convoMessages(_hashedTenant, entrypointHash, convoId),
-                epId
-            )));
+            const convos = convosByEntrypoint.flatMap(({ entrypointHash, epId, convos }) => convos
+                .filter(conId => conId === convoId)
+                .map(conId => Conversation(
+                    conId,
+                    DataAccess.convoMessages(_hashedTenant, entrypointHash, conId, after),
+                    epId
+                ))
+            );
 
-            const interTenant = _session.instanceOwner
+            if (convos.length) {
+                return res.json(convos[0]);
+            }
+
+            const allIinterTenant = _session.instanceOwner
                 ? DataAccess.allInterTenantConvos()
                 : [DataAccess.interTenantConvo(_session.pk)];
+            const interTenant = allIinterTenant.find(convo => convo.id === convoId);
 
-            const convo = [...convos, ...interTenant].find(c => c.id === params.convoId);
+            interTenant.messages = interTenant.messages.filter(msg => msg.t > after);
 
-            return res.json(convo);
+            return res.json(interTenant);
         }
 
         const convoDirs = DataAccess.tenantEntrypointConvos(_hashedTenant, _hashedEntrypoint);
-        const convoId = params.convoId;
 
         if (!convoDirs.includes(convoId)) {
             return res.json(Conversation(convoId));
         }
 
-        const messages = DataAccess.convoMessages(_hashedTenant, _hashedEntrypoint, convoId);
+        const messages = DataAccess.convoMessages(_hashedTenant, _hashedEntrypoint, convoId, after);
         const convo = Conversation(convoId, messages);
 
         console.log(convo);

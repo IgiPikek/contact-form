@@ -74,9 +74,10 @@ function allTenantConvos(tenantHash) {
         }));
 }
 
-function convoMessages(tenantHash, entrypointHash, convoId) {
+function convoMessages(tenantHash, entrypointHash, convoId, after = 0) {
     return fs.readdirSync(Dirs.TenantEntrypointConversation(tenantHash, entrypointHash, convoId))
-        .map(file => JSON.parse(fs.readFileSync(Dirs.TenantEntrypointMessage(tenantHash, entrypointHash, convoId, file), `utf8`)));
+        .map(file => JSON.parse(fs.readFileSync(Dirs.TenantEntrypointMessage(tenantHash, entrypointHash, convoId, file), `utf8`)))
+        .filter(msg => msg.t > after);
 }
 
 function latestConvoMessage(tenantHash, entrypointHash, convoId) {
@@ -133,7 +134,7 @@ async function storeInterTenantMessage(encryptedMsg) {
     fs.mkdirSync(Dirs.InterTenantConvo(convoId), { recursive: true });
     fs.writeFileSync(Dirs.InterTenantMessage(convoId, dataHash), serialized);
 
-    return serialized;
+    return JSON.parse(serialized);
 }
 
 /// Stores a message in the appropriate regular or inter-tenant conversation.
