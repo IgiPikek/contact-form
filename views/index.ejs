@@ -37,6 +37,68 @@
         section:nth-of-type(2n) {
             background-color: #eee;
         }
+
+        .conversation-picker {
+            width: 15em;
+            border: 1px solid #000;
+            box-sizing: border-box;
+            font-family: sans-serif;
+        }
+        .conversation-picker .convo-item {
+            position: relative;
+            display: flex;
+            height: 3em;
+            cursor: pointer;
+        }
+        .conversation-picker .convo-item:hover {
+            background-color: #ddc;
+        }
+        .conversation-picker .convo-item:not(:last-child) {
+            border-bottom: 1px solid #000;
+        }
+        .conversation-picker .convo-item.selected {
+            background-color: #0ff;
+        }
+        .conversation-picker .convo-item.selected:hover {
+            background-color: #2dd;
+        }
+        .convo-item .avatar {
+            height: 2.5em;
+            width: 2.5em;
+            flex-shrink: 0;
+            flex-grow: 0;
+            box-sizing: border-box;
+            margin: .25em;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-shadow: 1px 1px #fff;
+            /* Background color depends on convo ID and must be applied dynamically in HTML */
+        }
+        .convo-item .convo-preview {
+            overflow: hidden;
+            margin-right: .4em;
+            flex-grow: 1;
+        }
+        .convo-preview .convo-partner {
+            margin: .4em 0;
+            font-size: .9em;
+        }
+        .convo-preview .last-message {
+            font-size: .7em;
+            font-style: italic;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+        .convo-item .convo-date {
+            position: absolute;
+            right: 0;
+            padding: .4em;
+            font-size: .8em;
+            font-style: italic;
+        }
     </style>
     <script src="/lib/sodium-plus.js"></script>
     <script src="/lib/vue.global.js"></script>
@@ -77,9 +139,20 @@
     <template v-if="currentPage === 'login-captcha'">
     </template>
 
-    <template v-if="currentPage === 'messages'">
+    <template v-if="currentPage === 'messages' && admin">
+        <h2>ADMIN PAGE</h2>
+        <button @click="getMessages">Refresh</button>
+        <div>
+            <Conversation-Picker :convos="convos" @selection-changed="convoChanged"></Conversation-Picker>
+            <main>
+                <Conversation v-if="selectedConvo" :convo="selectedConvo" @reply="sendResponse"></Conversation>
+            </main>
+        </div>
+    </template>
+
+    <template v-if="currentPage === 'messages' && !admin">
         <h2>Messages</h2>
-        <p>{{admin ? "Admin page" : "Hello " + name}}</p>
+        <p>Hello {{name}}</p>
         <button @click="getMessages">Refresh</button>
 
         <!-- threads, email style -->
@@ -92,6 +165,7 @@
 
 
 <%- include("components/_conversation"); %>
+<%- include("components/_conversation-picker"); %>
 
 <script type="module">
     // TODO rename file

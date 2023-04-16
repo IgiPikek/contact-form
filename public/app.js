@@ -19,17 +19,68 @@ export async function init(csrf) {
                 this.replyText = ``;
             },
             toUTCString: time => new Date(time).toUTCString(),
-            isSelf(name) {
-                return this.$root.name.toLowerCase() === name.toLowerCase();
+        },
+    };
+
+    const ConversationPickerItem = {
+        props: [`convo`, `selected`],
+        template: `#conversation-picker-item`,
+        computed: {
+            convoColor() {
+                return `#` + this.convo.id.slice(0, 6);
+            },
+            convoPartner() {
+                const partnerEntry = this.convo.entries.find(e => !this.$root.isSelf(e.name));
+                return partnerEntry?.name;
+            },
+            lastEntry() {
+                return this.$parent.lastEntry(this.convo.entries);
+            },
+        },
+        methods: {
+            toShortISODate(entry) {
+                return new Date(entry.time).toISOString().substring(0, 10);
+            },
+        },
+    };
+
+    const ConversationPicker = {
+        components: {
+            ConversationPickerItem,
+        },
+        props: [`convos`],
+        emits: [`selectionChanged`],
+        template: `#conversation-picker`,
+        data() {
+            return {
+                currentSelection: undefined,
+            };
+        },
+        methods: {
+            lastEntry(entries) {
+                return entries.reduce((greatest, entry) => greatest.time > entry.time ? greatest : entry, {});
+            },
+
+            changeSelection(convo) {
+                if (this.currentSelection === convo) return;
+
+                this.currentSelection = convo;
+                this.$emit(`selectionChanged`, convo);
+            },
+        },
+        computed: {
+            convosSorted() {
+                // Results of `lastEntry` could be cached for higher efficiency.
+                return this.convos.sort((a, b) => this.lastEntry(b.entries).time - this.lastEntry(a.entries).time);
             },
         },
     };
 
 
-
     Vue.createApp({
         components: {
             Conversation,
+            ConversationPicker,
         },
 
         data() {
@@ -44,6 +95,7 @@ export async function init(csrf) {
                 captcha: ``,
 
                 convos: [],
+                selectedConvo: undefined,
 
                 tenantId: window.location.pathname,
                 serverPublic: undefined,
@@ -126,8 +178,6 @@ export async function init(csrf) {
                     headers: { "Authorization": this.authToken },
                 }).then(res => res.json());
 
-                console.log(convos);
-
                 this.convos = await Promise.all(convos.map(async convo => {
                     const oppositePublic = this.admin ? X25519PublicKey.from(await sodium.sodium_hex2bin(convo.id)) : this.serverPublic;
                     return ({
@@ -159,6 +209,14 @@ export async function init(csrf) {
 
                 const [message] = await decryptMessages(this.clientSecret, oppositePublic, [ciphermsg]);
                 this.convos.find(convo => convo.id === convoId).entries.splice(0, 0, message);
+            },
+
+            isSelf(name) {
+                return this.name.toLowerCase() === name.toLowerCase();
+            },
+
+            convoChanged(convo) {
+                this.selectedConvo = convo;
             },
         },
     }).mount('#app');
