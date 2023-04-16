@@ -31,7 +31,7 @@ SodiumPlus.auto().then(async sodium => {
 
     app.use(express.static(Dirs.Public));
 
-    app.use(express.json());
+    app.use(express.json({ limit: `11mb` }));
 
 
 

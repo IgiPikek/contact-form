@@ -143,12 +143,12 @@ export function getApp(sid) {
                 }));
             },
 
-            async sendResponse(convo, replyText, resetInput) {
+            async sendResponse(convo, { text, attachment }, resetInput) {
                 // TODO validate input
-                console.log(replyText, convo);
+                console.log(text, convo);
 
                 // name seems a bit easy to manipulate
-                const plaintext = Message(state.name, replyText);
+                const plaintext = Message(state.name, text, attachment);
                 const conversationKey = state.admin ? X25519PublicKey.from(await sodium.sodium_hex2bin(convo.id)) : state.clientPublic;
                 const oppositePublic = state.admin
                     ? (convo.id === state.clientPublic.toString(`hex`) ? X25519PublicKey.from(await sodium.sodium_hex2bin(convo.io)) : conversationKey)
@@ -234,8 +234,8 @@ export function getApp(sid) {
         return decrypted;
     }
 
-    function Message(name, msg) {
-        return new TextEncoder().encode(JSON.stringify({ name, msg }));
+    function Message(name, msg, attachment = undefined) {
+        return new TextEncoder().encode(JSON.stringify({ name, msg, attachment }));
     }
 
     async function createPayload({ plaintext, conversationKey, ownSecret, oppositePublic }) {

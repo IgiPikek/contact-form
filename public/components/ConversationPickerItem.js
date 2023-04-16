@@ -15,7 +15,12 @@ export default {
             return this.$parent.lastEntry(this.convo.entries);
         },
         lastMessage() {
-            return this.lastEntry?.msg;
+            const entry = this.lastEntry;
+
+            if (!entry) return ``;
+            if (!entry.msg && entry.attachment) return `(Attachment)`;
+
+            return entry.msg;
         },
         lastMessageDate() {
             const entryTime = this.lastEntry?.time;

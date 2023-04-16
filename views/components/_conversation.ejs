@@ -3,15 +3,44 @@
         <div class="meta">{{convo.id}}</div>
         <div class="reply-controls">
             <!-- TODO autofocus -->
-            <textarea v-model="replyText" cols="50" rows="3"></textarea>
-            <button @click="reply" :disabled="replyText.length === 0">Send</button>
+            <textarea v-model="replyText" cols="50" rows="3" @paste="paste" placeholder="Your message"></textarea>
+            <button @click="reply" :disabled="replyBlocked">Send</button>
+            <div v-if="attachment">
+                <Attachment new-message :attachment="attachment" @remove="removeAttachment"></Attachment>
+            </div>
+            <div v-else-if="serializing">
+                <span class="attachment-description">Attaching...</span>
+            </div>
+            <div v-else>
+                <label><span class="attachment-description">Attachment</span> <input type="file" @change="fileInputChange"></label>
+            </div>
         </div>
         <!-- TODO sorting. to allow seamless reading flow from old-to-new and new-to-old -->
         <div class="entries">
-            <div class="entry" v-for="({ name, time, msg }) in convo.entries">
+            <div class="entry" v-for="({ name, time, msg, attachment }) in convo.entries">
                 <div class="meta"><strong>{{$root.isSelf(name) ? 'Me' : name}}</strong> at {{toUTCString(time)}}</div>
-                <div class="message" :class="{ self: $root.isSelf(name) }">{{msg}}</div>
+                <div class="message" :class="{ self: $root.isSelf(name) }">
+                    <div>{{msg}}</div>
+                    <Attachment v-if="attachment" :attachment="attachment" @download="download(attachment)"></Attachment>
+                </div>
             </div>
         </div>
     </section>
+</template>
+
+<template id="attachment">
+    <div v-if="isImage">
+        <a :href="objectURL" target="_blank">
+            <img class="attachment" :src="objectURL" :alt="attachment.name">
+        </a>
+    </div>
+    <div class="attachment-controls">
+        <span class="attachment-description">
+            <template v-if="isImage">{{attachment.name}}, {{size}} kB</template>
+            <template v-else        ><a :href="objectURL" target="_blank">{{attachment.name}}</a>, {{size}} kB</template>
+        </span>
+
+        <button v-if="newMessage" @click="$emit(`remove`)">X</button>
+        <button v-else            @click="$emit(`download`)">Download</button>
+    </div>
 </template>
