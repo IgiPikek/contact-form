@@ -195,6 +195,8 @@ export function getApp(sid) {
             },
 
             async deleteEntrypoint(event, entrypoint) {
+                if (!confirm(`This will DELETE the entrypoint '${entrypoint}' with all its conversations. This CANNOT be undone. Continue deleting?`)) return;
+
                 try {
                     event.target.disabled = true;
                     const epsRaw = await deleteEntrypoint(entrypoint, state.authToken);
