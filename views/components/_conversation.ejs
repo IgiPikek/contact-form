@@ -5,7 +5,7 @@
 <!-- TODO in collapsed group, show one line of latest message -->
     <section>
         <div class="meta">{{convo.id}}</div>
-        <div>
+        <div class="reply-controls">
             <!-- TODO autofocus -->
             <textarea v-model="replyText" cols="50" rows="3"></textarea>
             <button @click="reply" :disabled="replyText.length === 0">Send</button>

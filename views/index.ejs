@@ -14,10 +14,15 @@
         }
         .entry {
             margin: 1em 0;
+            word-break: break-word;
         }
         .meta {
             font-size: .8rem;
             color: #444;
+        }
+        .reply-controls textarea {
+            box-sizing: border-box;
+            max-width: 100%;
         }
         .message {
             white-space: pre-wrap;
@@ -60,7 +65,7 @@
         <form v-if="loginStep === 1" @submit.prevent="login">
             <div>Calculate:</div>
             <div class="row">
-                <img src="/captcha" ref="imgCaptcha">
+                <img src="/captcha" alt="Captcha" width="150" height="50" ref="imgCaptcha">
                 <span> = </span>
                 <input type="text" v-model="captcha" ref="inpCaptcha" placeholder="Result" required>
             </div>
