@@ -55,8 +55,11 @@ export function getApp({ reactive }, sid) {
             async goToPage(page) {
                 this.state.currentPage = page;
 
-                if (page === `messages`) {
-                    await this.getMessages();
+                if (page === `messages` && state.admin) {
+                    state.convos = (await this.getLatestMessages()).map(convo => ({ ...convo, stub: true }));
+                }
+                else if (page === `messages` && !state.admin) {
+                    state.convos = await this.getMessages(state.clientPublic.toString(`hex`));
                 }
                 else if (page === `settings`) {
                     const epsRaw = await getEntrypoints(state.tenantPublic.toString(`hex`), state.authToken);
@@ -118,27 +121,14 @@ export function getApp({ reactive }, sid) {
                 this.goToPage(`messages`);
             },
 
-            async getMessages() {
-                const clientPublicHex = state.clientPublic.toString(`hex`);
-                const { json: convos } = await getJsonFromTenantWithSession(`convos/` + clientPublicHex, state.authToken);
+            async getLatestMessages() {
+                const { json: convos } = await getJsonFromTenantWithSession(`convos/latest`, state.authToken);
+                return await Promise.all(convos.map(decryptConvo));
+            },
 
-                state.convos = await Promise.all(convos.map(async convo => {
-                    const oppositePublic = state.admin
-                        ? X25519PublicKey.from(await sodium.sodium_hex2bin(state.instanceOwner ? convo.id : convo.io || convo.id))
-                        : state.tenantPublic;
-
-                    const entrypoint = convo.epId && (await sodium.crypto_box_seal_open(await sodium.sodium_hex2bin(convo.epId), state.clientPublic, state.clientSecret)).toString(`utf8`);
-                    const epHash = entrypoint && (await sodium.crypto_generichash(entrypoint)).toString(`hex`);
-
-                    return ({
-                        id: convo.id,
-                        io: convo.io,
-                        entries: (await decryptMessages(state.clientSecret, oppositePublic, convo.messages)).sort((a, b) => b.time - a.time),
-                        fromTenant: state.instanceOwner && convo.ti && (await sodium.crypto_box_seal_open(await sodium.sodium_hex2bin(convo.ti), state.clientPublic, state.clientSecret)).toString(`utf8`),
-                        entrypoint,
-                        epHash,
-                    });
-                }));
+            async getMessages(convoId) {
+                const { json: convo } = await getJsonFromTenantWithSession(`convos/` + convoId, state.authToken);
+                return [await decryptConvo(convo)];
             },
 
             async sendResponse(convo, { text, attachment }, resetInput) {
@@ -162,7 +152,7 @@ export function getApp({ reactive }, sid) {
                     }),
                 });
 
-                const ciphermsg = await submitResponse(tenantId, entrypoint, payload, state.authToken).then(res => res.text());
+                const ciphermsg = await submitResponse(tenantId, entrypoint, payload, state.authToken).then(res => res.json());
                 console.log(ciphermsg);
                 resetInput();
 
@@ -174,8 +164,21 @@ export function getApp({ reactive }, sid) {
                 return state.name.toLowerCase() === name.toLowerCase();
             },
 
-            convoChanged(convo) {
-                state.selectedConvo = convo;
+            async refresh() {
+                if (!state.selectedConvo) return;
+
+                const fullConvo = (await this.getMessages(state.selectedConvo.id))[0];
+                state.convos.splice(state.convos.findIndex(c => c.id === fullConvo.id), 1, fullConvo);
+            },
+
+            async convoChanged(convo) {
+                if (convo.stub) {
+                    const fullConvo = (await this.getMessages(convo.id))[0];
+                    state.selectedConvo = fullConvo;
+                    state.convos.splice(state.convos.findIndex(c => c.id === fullConvo.id), 1, fullConvo);
+                } else {
+                    state.selectedConvo = convo;
+                }
             },
 
             async createEntrypoint(entrypoint) {
@@ -212,11 +215,28 @@ export function getApp({ reactive }, sid) {
     };
 
 
+    async function decryptConvo(convo) {
+        const oppositePublic = state.admin
+            ? X25519PublicKey.from(await sodium.sodium_hex2bin(state.instanceOwner ? convo.id : convo.io || convo.id))
+            : state.tenantPublic;
+
+        const entrypoint = convo.epId && (await sodium.crypto_box_seal_open(await sodium.sodium_hex2bin(convo.epId), state.clientPublic, state.clientSecret)).toString(`utf8`);
+        const epHash = entrypoint && (await sodium.crypto_generichash(entrypoint)).toString(`hex`);
+
+        return ({
+            id: convo.id,
+            io: convo.io,
+            entries: (await decryptMessages(state.clientSecret, oppositePublic, convo.messages)).sort((a, b) => b.time - a.time),
+            fromTenant: state.instanceOwner && convo.ti && (await sodium.crypto_box_seal_open(await sodium.sodium_hex2bin(convo.ti), state.clientPublic, state.clientSecret)).toString(`utf8`),
+            entrypoint,
+            epHash,
+        });
+    }
+
     async function decryptMessages(ownSecret, oppositePublic, messages) {
         const decrypted = [];
 
-        for (const message of messages) {
-            const { k, n, m, t } = JSON.parse(message);
+        for (const { k, n, m, t } of messages) {
             const plainMsg = await sodium.crypto_box_open(
                 await sodium.sodium_hex2bin(m),
                 await sodium.sodium_hex2bin(n),

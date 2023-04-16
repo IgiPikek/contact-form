@@ -1,12 +1,12 @@
 <template id="conversation-picker">
     <aside class="conversation-picker">
-        <Conversation-Picker-Item v-for="convo in convosSorted" :convo="convo" @click="changeSelection(convo)" :selected="convo === currentSelection"></Conversation-Picker-Item>
+        <Conversation-Picker-Item v-for="convo in convosSorted" :convo="convo" @click="changeSelection(convo)" :selected="convo.id === currentSelection?.id"></Conversation-Picker-Item>
     </aside>
 </template>
 
 <template id="conversation-picker-item">
     <div class="convo-item" :class="{ selected }">
-        <div class="avatar" :style="{ 'background-color': convoColor }">{{(convoPartner || `?`)[0].toUpperCase()}}</div>
+        <div class="avatar" :style="{ 'background-color': convoColor }">{{convoPartner?.[0].toUpperCase() || `...`}}</div>
         <div class="convo-preview">
             <div class="convo-partner">{{convoPartner}}</div>
 

@@ -193,6 +193,27 @@ SodiumPlus.auto().then(async sodium => {
         res.json(publicKeyRaw);
     });
 
+    app.get(entrypoint(`/convos/latest`), requireSession, validateEntrypoint, withAuthRest, ({ _session, params, _hashedTenant, _hashedEntrypoint }, res) => {
+        if (!_session.admin) return res.status(400).send();
+
+        const convosByEntrypoint = DataAccess.allTenantConvos(_hashedTenant);
+        const latestOfConvos = convosByEntrypoint.flatMap(({ entrypointHash, epId, convos }) => convos.map(convoId => Conversation(
+            convoId,
+            [DataAccess.latestConvoMessage(_hashedTenant, entrypointHash, convoId)],
+            epId
+        )));
+
+        const interTenant = _session.instanceOwner
+            ? DataAccess.allInterTenantConvos()
+            : [DataAccess.interTenantConvo(_session.pk)];
+
+        interTenant.forEach(convo => {
+            const latest = DataAccess.latestMessage(convo.messages);
+            convo.messages = [latest];
+        });
+        return res.json([...latestOfConvos, ...interTenant]);
+    });
+
     app.get(entrypoint(`/convos/:convoId`), requireSession, validateEntrypoint, withAuthRest, ({ _session, params, _hashedTenant, _hashedEntrypoint }, res) => {
         if (_session.admin) {
             const convosByEntrypoint = DataAccess.allTenantConvos(_hashedTenant);
@@ -206,21 +227,23 @@ SodiumPlus.auto().then(async sodium => {
                 ? DataAccess.allInterTenantConvos()
                 : [DataAccess.interTenantConvo(_session.pk)];
 
-            return res.json([...convos, ...interTenant]);
+            const convo = [...convos, ...interTenant].find(c => c.id === params.convoId);
+
+            return res.json(convo);
         }
 
         const convoDirs = DataAccess.tenantEntrypointConvos(_hashedTenant, _hashedEntrypoint);
         const convoId = params.convoId;
 
         if (!convoDirs.includes(convoId)) {
-            return res.json([Conversation(convoId)]);
+            return res.json(Conversation(convoId));
         }
 
         const messages = DataAccess.convoMessages(_hashedTenant, _hashedEntrypoint, convoId);
         const convo = Conversation(convoId, messages);
 
         console.log(convo);
-        return res.json([convo]);
+        return res.json(convo);
     });
 
     app.post(entrypoint(`/message`), requireSession, validateEntrypoint, withAuthRest, async ({ _session, body, _hashedTenant, _hashedEntrypoint }, res) => {
@@ -233,9 +256,9 @@ SodiumPlus.auto().then(async sodium => {
         // TODO signing or encrypting the data including the timestamp would be interesting in order to avoid manipulation
 
         const targetEntrypoint = _session.admin ? body.epHash : _hashedEntrypoint;
-        const serialized = await DataAccess.storeMessage(_hashedTenant, targetEntrypoint, body.encryptedMessage);
+        const stampedMessage = await DataAccess.storeMessage(_hashedTenant, targetEntrypoint, body.encryptedMessage);
 
-        res.send(serialized);
+        res.json(stampedMessage);
     });
 
     app.get(entrypoint(`/entrypoint`), requireSession, validateEntrypoint, withAuthRest, async ({ _session, _hashedTenant, _hashedEntrypoint }, res) => {

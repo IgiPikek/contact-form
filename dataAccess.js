@@ -3,6 +3,8 @@ module.exports = {
     allInterTenantConvos,
     allTenantConvos,
     convoMessages,
+    latestConvoMessage,
+    latestMessage,
     createEntrypoint,
     createTenant,
     deleteEntrypoint,
@@ -74,7 +76,16 @@ function allTenantConvos(tenantHash) {
 
 function convoMessages(tenantHash, entrypointHash, convoId) {
     return fs.readdirSync(Dirs.TenantEntrypointConversation(tenantHash, entrypointHash, convoId))
-        .map(file => fs.readFileSync(Dirs.TenantEntrypointMessage(tenantHash, entrypointHash, convoId, file), `utf8`));
+        .map(file => JSON.parse(fs.readFileSync(Dirs.TenantEntrypointMessage(tenantHash, entrypointHash, convoId, file), `utf8`)));
+}
+
+function latestConvoMessage(tenantHash, entrypointHash, convoId) {
+    const messages = convoMessages(tenantHash, entrypointHash, convoId);
+    return latestMessage(messages);
+}
+
+function latestMessage(messages) {
+    return messages.reduce((latest, msg) => latest.t > msg.t ? latest : msg);
 }
 
 function createEntrypoint(tenantHash, entrypointHash, encryptedEntrypoint) {
@@ -112,7 +123,7 @@ function interTenantConvo(convoId) {
         io: instanceOwnerPk(),  // instance owner
         ti: encTenantId,  // tenant ID, only required by instance owner
         messages: msgFiles
-            .map(file => fs.readFileSync(Dirs.InterTenantMessage(convoId, file), `utf8`)),
+            .map(file => JSON.parse(fs.readFileSync(Dirs.InterTenantMessage(convoId, file), `utf8`))),
     };
 }
 
@@ -136,7 +147,7 @@ async function storeMessage(tenantHash, entrypointHash, encryptedMsg) {
     fs.mkdirSync(Dirs.TenantEntrypointConversation(tenantHash, entrypointHash, convoId), { recursive: true });
     fs.writeFileSync(Dirs.TenantEntrypointMessage(tenantHash, entrypointHash, convoId, dataHash), serialized);
 
-    return serialized;
+    return JSON.parse(serialized);
 }
 
 function tenantEntrypointConvos(tenantHash, entrypointHash) {

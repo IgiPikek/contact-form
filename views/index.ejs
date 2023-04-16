@@ -180,7 +180,7 @@
     <template v-if="state.currentPage === 'messages' && state.admin">
         <h2>ADMIN PAGE</h2>
         <!-- TODO keep conversation picker selected and refresh conversation -->
-        <button @click="getMessages">Refresh</button>
+        <button @click="refresh">Refresh</button>
         <button @click="goToPage('settings')">Settings</button>
         <div>
             <Conversation-Picker :convos="state.convos" @selection-changed="convoChanged"></Conversation-Picker>
@@ -193,7 +193,7 @@
     <template v-if="state.currentPage === 'messages' && !state.admin">
         <h2>Messages</h2>
         <p>Hello {{state.name}}</p>
-        <button @click="getMessages">Refresh</button>
+        <button @click="refresh">Refresh</button>
 
         <!-- threads, email style -->
         <template v-for="convo in state.convos" :key="convo.id">
