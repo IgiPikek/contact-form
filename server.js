@@ -2,8 +2,6 @@ const env = require(`./env.json`);
 const https = require(`https`);
 const express = require(`express`);
 const app = express();
-const session = require(`express-session`);
-const csrf = require(`csurf`);
 
 const svgCaptcha = require(`svg-captcha`);
 
@@ -11,6 +9,8 @@ const fs = require(`fs`);
 const path = require(`path`);
 
 const { SodiumPlus, X25519PublicKey } = require(`sodium-plus`);
+
+const Session = require(`./session`);
 
 const Dirs = {
     Tenants: `tenants`,
@@ -31,53 +31,40 @@ const Dirs = {
 // TODO avoid multiple users using the same name but different passwords. Can cause confusion. Displaying user's public key mitigates.
 
 // TODO trailing '/' causes error
-// TODO rework session handling. Especially with regard to csrf
 // TODO test if https redirect implementation is appropriate for live env
 
 
 SodiumPlus.auto().then(async sodium => {
 
-    // TODO maybe rename, to convey that it can only be used to secure rest api calls
-    const withAuthRest = (req, res, next) => {
-        console.log(`with auth`, req.session.data.authToken, req.headers.authorization);
-        if (!req.headers.authorization || req.headers.authorization !== req.session.data.authToken) {
-            return res.status(401).send();
-        }
-        next();
-    };
-
-
     app.set(`view engine`, `ejs`);
     app.set('views', Dirs.Views);
 
-    app.use(session({
-        resave: false,
-        saveUninitialized: false,
-        name: `sid`,
-        secret: `asf8ha@wtepfasijdg08sharigowueibt0ps8rgohiwi3jtwio`,  // TODO should probably be regenerated on startup
-        unset: `destroy`,
-    }));
-
-    app.use(csrf({}));
 
     app.use(express.static(Dirs.Public));
 
     app.use(express.json());
 
 
-    app.use(({ session }, _, next) => {
-        if (!session.data) {
-            // Session data is bundled in 'data' property for easy clearing.
-            // Always provide a default value so other handlers don't have to check for its existence.
-            // TODO only set it after login. If set, a session cookie will be sent, which shall not happen before login
-            session.data = {};
-        }
-        next();
-    });
-
-
 
     let tenants;
+
+    const requireSession = (req, res, next) => {
+        Session.getSession(req.headers.sid || req.query.sid, session => {
+            req._session = session;
+            next();
+        }).or(() => {
+            console.log(`unknown session`, req.headers.sid);
+            res.status(404).send();
+        });
+    };
+
+    const withAuthRest = (req, res, next) => {
+        console.log(`with auth`, req._session.authToken, req.headers.authorization);
+        if (!req.headers.authorization || req.headers.authorization !== req._session.authToken) {
+            return res.status(401).send();
+        }
+        next();
+    };
 
     const validateTenant = async (req, res, next) => {
         if (!tenants) {
@@ -96,23 +83,28 @@ SodiumPlus.auto().then(async sodium => {
     };
 
 
-    app.get(`/captcha`, ({ session }, res) => {
-        const captcha = svgCaptcha.createMathExpr({ size: 20, noise: 8, mathMax: 12, mathOperator: `+-` });
-        console.log(captcha.text);
+    const tenant = route => `/:tenantId${route}`;
 
-        session.data = { captcha: captcha.text };
+
+    app.get(tenant(`/captcha`), requireSession, validateTenant, (req, res) => {
+        const captcha = svgCaptcha.createMathExpr({ size: 20, noise: 8, mathMax: 12, mathOperator: `+-` });
+        console.log(`captcha`, captcha.text);
+
+        req._session.captcha = captcha.text;
+
         res.status(200)
             .type(`svg`)
             .send(captcha.data);
     });
 
-    app.get(`/auth`, async ({ query, session }, res) => {
+    app.get(tenant(`/auth`), requireSession, validateTenant, async ({ query, _session }, res) => {
         // TODO avoid unlimited retries
-        console.log(session.data.captcha);
-        if (!session.data.captcha || query.captcha !== session.data.captcha) return res.status(400).send();
+
+        console.log(`captcha expected: ${_session.captcha}, is: ${query.captcha}`);
+        if (!_session.captcha || query.captcha !== _session.captcha) return res.status(400).send();
 
         const authToken = await sodium.randombytes_buf(32);
-        session.data.authToken = authToken.toString(`hex`);
+        _session.authToken = authToken.toString(`hex`);
 
         const cryptoToken = await sodium.crypto_box_seal(authToken, X25519PublicKey.from(await sodium.sodium_hex2bin(query.clientPublic)));
 
@@ -129,11 +121,20 @@ SodiumPlus.auto().then(async sodium => {
             return res.status(400).send();
         }
 
-        res.render(`setup`, { tenant, csrf: req.csrfToken() });
+        const session = Session.newSession();
+        const csrfToken = (await sodium.randombytes_buf(32)).toString(`hex`);
+
+        session.csrfToken = csrfToken;
+
+        res.render(`setup`, { tenant, sid: session.id, csrfToken });
     });
 
-    app.post(`/new/:tenant`, async (req, res) => {
-        console.log(`post new`, req.body);
+    app.post(`/new/:tenant`, requireSession, async (req, res) => {
+        console.log(`post new`, req.body, req._session.csrfToken, req.headers.csrf);
+
+        if (!req.headers.csrf || req._session.csrfToken !== req.headers.csrf) {
+            return res.status(400).send();
+        }
 
         const tenant = req.params.tenant;
         const tenantHash = (await sodium.crypto_generichash(tenant)).toString(`hex`);
@@ -149,29 +150,28 @@ SodiumPlus.auto().then(async sodium => {
     });
 
 
-    const tenant = route => `/:tenantId${route}`;
-
     app.get(tenant(`/`), validateTenant, (req, res) => {
         console.log(`:tenantId/`, req._hashedTenant);
 
+        const session = Session.newSession();
+
         // TODO do not render pending tenants. Trying to log into pending tenant throws error because public key doesn't exist yet.
-        res.render(`index`, { tenant: req.params.tenantId, csrf: req.csrfToken(), prod: env.prod });
+        res.render(`index`, { tenant: req.params.tenantId, sid: session.id, prod: env.prod });
     });
 
-    app.get(tenant(`/pk`), validateTenant, withAuthRest, ({ query, session, _hashedTenant }, res) => {
-        console.log(query, session.data.captcha);
+    app.get(tenant(`/pk`), requireSession, validateTenant, withAuthRest, ({ query, _session, _hashedTenant }, res) => {
+        console.log(query, _session.captcha);
 
         const publicKeyRaw = require(`.` + path.sep + Dirs.TenantPublicKeyFile(_hashedTenant));
 
         // this field is probably not strictly necessary, but it might make the distinction between admin and visitors more obvious
-        // TODO must be unset when logging out. or the session must be destroyed
-        // Must be set every time as there currently is no proper logout mechanism. Meaning the session would remain 'admin' even after page reload (pseudo-logout)
-        session.data.admin = query.clientPublic === publicKeyRaw;
+        _session.admin = query.clientPublic === publicKeyRaw;
 
+        console.log(`pk raw`, publicKeyRaw);
         res.json(publicKeyRaw);
     });
 
-    app.post(tenant(`/message`), validateTenant, withAuthRest, async ({ body, _hashedTenant }, res) => {
+    app.post(tenant(`/message`), requireSession, validateTenant, withAuthRest, async ({ body, _hashedTenant }, res) => {
         console.log(`SUBMIT`);
 
         // TODO validate
@@ -195,10 +195,10 @@ SodiumPlus.auto().then(async sodium => {
         res.send(serialized);
     });
 
-    app.get(tenant(`/convos/:convoId`), validateTenant, withAuthRest, ({ session, params, _hashedTenant }, res) => {
+    app.get(tenant(`/convos/:convoId`), requireSession, validateTenant, withAuthRest, ({ _session, params, _hashedTenant }, res) => {
         const convoDirs = fs.readdirSync(Dirs.TenantConversations(_hashedTenant));
 
-        if (session.data.admin) {
+        if (_session.admin) {
             const convos = convoDirs.map(convoId => Conversation(
                 convoId,
                 readFilesSync(Dirs.TenantConversation(_hashedTenant, convoId))

@@ -131,7 +131,7 @@
         <form v-if="loginStep === 1" @submit.prevent="login">
             <div>Calculate:</div>
             <div class="row">
-                <img src="/captcha" alt="Captcha" width="150" height="50" ref="imgCaptcha">
+                <img :src="tenantId + '/captcha?sid=' + sid" alt="Captcha" width="150" height="50" ref="imgCaptcha">
                 <span> = </span>
                 <input type="text" v-model="captcha" ref="inpCaptcha" placeholder="Result" required>
             </div>
@@ -175,7 +175,7 @@
     // TODO rename file
     import { init } from "./app.js";
 
-    init(`<%= csrf %>`);
+    init(`<%= sid %>`);
 </script>
 
 

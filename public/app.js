@@ -1,5 +1,8 @@
-export async function init(csrf) {
+export async function init(sid) {
     const sodium = await SodiumPlus.auto();
+
+    const tenantId = window.location.pathname;
+    const getJsonFromTenantWithSession = getJson(tenantId, sid);
 
     const Conversation = {
         // TODO lock Send button while waiting for response
@@ -85,6 +88,8 @@ export async function init(csrf) {
 
         data() {
             return {
+                sid,
+
                 currentPage: `login`,
                 loginStep: 0,
 
@@ -97,7 +102,7 @@ export async function init(csrf) {
                 convos: [],
                 selectedConvo: undefined,
 
-                tenantId: window.location.pathname,
+                tenantId,
                 serverPublic: undefined,
                 clientSecret: undefined,  // not sure whether it should be in vue data. Function scope might be safer
 
@@ -140,8 +145,7 @@ export async function init(csrf) {
                 console.log({ clientPublic: clientPublic.toString(`hex`), clientSecret: clientSecret.toString(`hex`), pkHash });
 
 
-                const cryptoToken = await fetch(`/auth?captcha=${this.captcha}&clientPublic=${clientPublic.toString(`hex`)}`)
-                    .then(res => res.json())
+                const cryptoToken = await getJsonFromTenantWithSession(`auth?captcha=${this.captcha}&clientPublic=${clientPublic.toString(`hex`)}`)
                     .catch(() => {
                         this.captcha = ``;
                         // Trigger reloading the captcha.
@@ -154,9 +158,7 @@ export async function init(csrf) {
 
                 this.authToken = authToken;
 
-                const serverPublicHex = await fetch(`${this.tenantId}/pk?captcha=${this.captcha}&clientPublic=${clientPublic.toString(`hex`)}`, {
-                    headers: { "Authorization": authToken },
-                }).then(res => res.json());
+                const serverPublicHex = await getJsonFromTenantWithSession(`pk?captcha=${this.captcha}&clientPublic=${clientPublic.toString(`hex`)}`, authToken);
 
                 // TODO handle failed request
 
@@ -174,9 +176,7 @@ export async function init(csrf) {
             },
 
             async getMessages() {
-                const convos = await fetch(`${this.tenantId}/convos/` + this.clientPublic.toString(`hex`), {
-                    headers: { "Authorization": this.authToken },
-                }).then(res => res.json());
+                const convos = await getJsonFromTenantWithSession(`convos/` + this.clientPublic.toString(`hex`), this.authToken);
 
                 this.convos = await Promise.all(convos.map(async convo => {
                     const oppositePublic = this.admin ? X25519PublicKey.from(await sodium.sodium_hex2bin(convo.id)) : this.serverPublic;
@@ -203,7 +203,7 @@ export async function init(csrf) {
                     oppositePublic,
                 });
 
-                const ciphermsg = await submitResponse(this.tenantId, payload, csrf, this.authToken).then(res => res.text());
+                const ciphermsg = await submitResponse(tenantId, payload, this.authToken).then(res => res.text());
                 console.log(ciphermsg);
                 resetInput();
 
@@ -259,15 +259,28 @@ export async function init(csrf) {
         });
     }
 
-    function submitResponse(tenantId, payload, csrf, authToken) {
+    function submitResponse(tenantId, payload, authToken) {
         return fetch(`${tenantId}/message`, {
             method: `post`,
             headers: {
-                "csrf-token": csrf,
                 "Authorization": authToken,
                 "Content-Type": `application/json`,
+                sid,
             },
             body: payload,
         });
+    }
+
+    function getJson(tenantId, sid) {
+        return (url, authToken = undefined) => {
+            const headers = {
+                "Content-Type": `application/json`,
+                sid,
+            };
+            if (authToken) {
+                headers.Authorization = authToken;
+            }
+            return fetch(tenantId + `/` + url, { headers }).then(res => res.json());
+        };
     }
 }

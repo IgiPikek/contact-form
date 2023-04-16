@@ -39,8 +39,9 @@
             method: `post`,
             credentials: `include`,
             headers: {
-                "csrf-token": `<%= csrf %>`,
+                "csrf": `<%= csrfToken %>`,
                 "Content-Type": `application/json`,
+                "sid": `<%= sid %>`,
             },
             body: JSON.stringify({ pk: keys.clientPublic.toString(`hex`) }),
         });
