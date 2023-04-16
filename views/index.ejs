@@ -115,7 +115,12 @@
             font-style: italic;
         }
     </style>
-    <script src="/lib/sodium-plus.js"></script>
+
+    <% if (prod) { %>
+    <script async src="/lib/sodium-plus.min.js"></script>
+    <% } else { %>
+    <script async src="/lib/sodium-plus.js"></script>
+    <% } %>
 </head>
 
 <body>
