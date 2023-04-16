@@ -13,6 +13,8 @@ function newSession() {
         captcha: undefined,
         authToken: undefined,
         admin: false,
+        pk: undefined,
+        instanceOwner: false,
     };
 
     sessions.set(session.id, session);

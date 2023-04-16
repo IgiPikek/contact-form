@@ -6,11 +6,15 @@
 
 <template id="conversation-picker-item">
     <div class="convo-item" :class="{ selected }">
-        <div class="avatar" :style="{ 'background-color': convoColor }">{{convoPartner[0].toUpperCase()}}</div>
+        <div class="avatar" :style="{ 'background-color': convoColor }">{{(convoPartner || `?`)[0].toUpperCase()}}</div>
         <div class="convo-preview">
             <div class="convo-partner">{{convoPartner}}</div>
-            <div class="last-message">{{lastEntry.msg}}</div>
+
+            <div v-if="instanceOwner" class="convo-intertenant"><span class="convo-intertenant-tag">Instance owner</span></div>
+            <div v-else-if="subTenant" class="convo-intertenant"><span class="convo-intertenant-tag">Tenant: <strong>{{convo.fromTenant}}</strong></span></div>
+
+            <div class="last-message">{{lastMessage}}</div>
         </div>
-        <div class="convo-date">{{toShortISODate(lastEntry)}}</div>
+        <div class="convo-date">{{lastMessageDate}}</div>
     </div>
 </template>

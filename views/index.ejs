@@ -39,7 +39,7 @@
         }
 
         .conversation-picker {
-            width: 15em;
+            width: 18em;
             border: 1px solid #000;
             box-sizing: border-box;
             font-family: sans-serif;
@@ -47,7 +47,7 @@
         .conversation-picker .convo-item {
             position: relative;
             display: flex;
-            height: 3em;
+            height: 3.8em;
             cursor: pointer;
         }
         .conversation-picker .convo-item:hover {
@@ -67,6 +67,7 @@
             width: 2.5em;
             flex-shrink: 0;
             flex-grow: 0;
+            align-self: center;
             box-sizing: border-box;
             margin: .25em;
             border-radius: 50%;
@@ -80,10 +81,24 @@
             overflow: hidden;
             margin-right: .4em;
             flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding-top: .4rem;
+            padding-bottom: .3rem;
         }
         .convo-preview .convo-partner {
-            margin: .4em 0;
             font-size: .9em;
+        }
+        .convo-preview .convo-intertenant {
+            font-size: .7em;
+        }
+        .convo-preview .convo-intertenant-tag {
+            padding: 2px 4px;
+            background-color: royalblue;
+            color: white;
+            border: 1px solid blue;
+            border-radius: 2px;
         }
         .convo-preview .last-message {
             font-size: .7em;

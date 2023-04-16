@@ -119,6 +119,16 @@ SodiumPlus.auto().then(async sodium => {
         // this field is probably not strictly necessary, but it might make the distinction between admin and visitors more obvious
         _session.admin = query.clientPublic === publicKeyRaw;
 
+        if (_session.admin) {
+            _session.pk = publicKeyRaw;
+            const ownerKey = DataAccess.instanceOwnerPk();
+            _session.instanceOwner = ownerKey === query.clientPublic;
+
+            if (_session.instanceOwner) {
+                console.log(`- instance owner -`);
+            }
+        }
+
         console.log(`pk raw`, publicKeyRaw);
         res.json(publicKeyRaw);
     });
@@ -131,7 +141,12 @@ SodiumPlus.auto().then(async sodium => {
                 convoId,
                 DataAccess.convoMessages(_hashedTenant, convoId)
             ));
-            return res.json(convos);
+
+            const interTenant = _session.instanceOwner
+                ? DataAccess.allInterTenantConvos()
+                : [DataAccess.interTenantConvo(_session.pk)];
+
+            return res.json([...convos, ...interTenant]);
         }
 
         const convoId = params.convoId;
@@ -150,22 +165,12 @@ SodiumPlus.auto().then(async sodium => {
     app.post(tenant(`/message`), requireSession, validateTenant, withAuthRest, async ({ body, _hashedTenant }, res) => {
         console.log(`SUBMIT`);
 
-        // TODO validate
-        const data = body;
-        const convoId = data.k;
-
-        data.t = Date.now();
-        console.log(data);
-
-        const serialized = JSON.stringify(data);
+        // TODO validate fields
+        console.log(body);
 
         // TODO perhaps there is a way to encrypt the data once more in order to hide who sent the message (can be seen from the key)
         // TODO signing or encrypting the data including the timestamp would be interesting in order to avoid manipulation
-
-        const dataHash = (await sodium.crypto_generichash(serialized)).toString(`hex`);
-        console.log(dataHash);
-
-        DataAccess.storeMessage(_hashedTenant, convoId, dataHash, serialized);
+        const serialized = await DataAccess.storeMessage(_hashedTenant, body);
 
         res.send(serialized);
     });
@@ -186,7 +191,12 @@ SodiumPlus.auto().then(async sodium => {
 
         session.csrfToken = csrfToken;
 
-        res.render(`setup`, { tenant, sid: session.id, csrfToken });
+        res.render(`setup`, {
+            tenant,
+            sid: session.id,
+            csrfToken,
+            instanceOwnerPk: DataAccess.instanceOwnerPk(),
+        });
     });
 
     app.post(`/new/:tenant`, requireSession, async (req, res) => {
@@ -203,9 +213,13 @@ SodiumPlus.auto().then(async sodium => {
             return res.status(400).send();
         }
 
-        DataAccess.createTenant(tenantHash, req.body.pk);
+        const encryptedMsg = req.body;
+        const encryptedTenantId = await sodium.crypto_box_seal(tenant, X25519PublicKey.from(await sodium.sodium_hex2bin(DataAccess.instanceOwnerPk())));
 
+        DataAccess.createTenant(tenantHash, encryptedMsg.k, encryptedTenantId.toString(`hex`));
         tenantCache.invalidate();
+
+        await DataAccess.storeInterTenantMessage(encryptedMsg);
 
         res.send(`/` + tenant);
     });

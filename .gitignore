@@ -4,6 +4,7 @@ node_modules/
 */lib/*
 
 /ssl/*
+/inter-tenant/*
 /tenants/*
 /pending-tenants/*
 

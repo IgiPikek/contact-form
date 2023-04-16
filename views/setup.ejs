@@ -13,8 +13,11 @@
 <p>Setup new tenant '<%= tenant %>'</p>
 
 <form method="post">
-    <input type="text" name="name" placeholder="Your name" required autofocus>
-    <input type="password" name="pw" placeholder="Passphrase" required>
+    <div>
+        <input type="text" name="name" placeholder="Your name" required autofocus>
+        <input type="password" name="pw" placeholder="Passphrase" required>
+    </div>
+    <input type="text" name="msg" placeholder="Message to owner" required>
     <input type="submit" value="Create tenant">
 </form>
 
@@ -28,12 +31,23 @@
 
         const name = form.name.value;
         const pw = form.pw.value;
+        const msg = form.msg.value;
 
-        if (!name || !pw) {
-            return alert(`Both 'name' and 'passphrase' are required.`);
+        if (!name || !pw || !msg) {
+            return alert(`All fields are required.`);
         }
 
         const keys = await userKeys(name, pw);
+        const message = JSON.stringify({ name, msg });
+        const nonce = await sodium.randombytes_buf(sodium.CRYPTO_BOX_NONCEBYTES);
+        const instanceOwnerPk = X25519PublicKey.from(await sodium.sodium_hex2bin(`<%- instanceOwnerPk %>`));
+
+        const ciphertext = await sodium.crypto_box(
+            new TextEncoder().encode(message),
+            nonce,
+            keys.clientSecret,
+            instanceOwnerPk
+        );
 
         const res = await fetch(``, {
             method: `post`,
@@ -43,7 +57,11 @@
                 "Content-Type": `application/json`,
                 "sid": `<%= sid %>`,
             },
-            body: JSON.stringify({ pk: keys.clientPublic.toString(`hex`) }),
+            body: JSON.stringify({
+                k: keys.clientPublic.toString(`hex`),
+                n: nonce.toString(`hex`),
+                m: ciphertext.toString(`hex`),
+            }),
         });
 
         window.location.href = await res.text();

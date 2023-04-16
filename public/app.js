@@ -16,7 +16,7 @@ export async function init(sid) {
         },
         methods: {
             reply() {
-                this.$emit(`reply`, this.convo.id, this.replyText, () => this.clear());
+                this.$emit(`reply`, this.convo, this.replyText, () => this.clear());
             },
             clear() {
                 this.replyText = ``;
@@ -30,7 +30,9 @@ export async function init(sid) {
         template: `#conversation-picker-item`,
         computed: {
             convoColor() {
-                return `#` + this.convo.id.slice(0, 6);
+                const instanceOwner = this.convo.id === this.$root.clientPublic.toString(`hex`);
+                const key = instanceOwner ? this.convo.io : this.convo.id;
+                return `#` + key.slice(0, 6);
             },
             convoPartner() {
                 const partnerEntry = this.convo.entries.find(e => !this.$root.isSelf(e.name));
@@ -39,10 +41,18 @@ export async function init(sid) {
             lastEntry() {
                 return this.$parent.lastEntry(this.convo.entries);
             },
-        },
-        methods: {
-            toShortISODate(entry) {
-                return new Date(entry.time).toISOString().substring(0, 10);
+            lastMessage() {
+                return this.lastEntry?.msg;
+            },
+            lastMessageDate() {
+                const entryTime = this.lastEntry?.time;
+                return entryTime && new Date(entryTime).toISOString().substring(0, 10) || `N/A`;
+            },
+            instanceOwner() {
+                return this.convo.id === this.$root.clientPublic.toString(`hex`);
+            },
+            subTenant() {
+                return this.convo.io === this.$root.clientPublic.toString(`hex`);
             },
         },
     };
@@ -104,6 +114,7 @@ export async function init(sid) {
 
                 tenantId,
                 serverPublic: undefined,
+                clientPublic: undefined,
                 clientSecret: undefined,  // not sure whether it should be in vue data. Function scope might be safer
 
                 admin: false,
@@ -176,25 +187,35 @@ export async function init(sid) {
             },
 
             async getMessages() {
-                const convos = await getJsonFromTenantWithSession(`convos/` + this.clientPublic.toString(`hex`), this.authToken);
+                const clientPublicHex = this.clientPublic.toString(`hex`);
+                const convos = await getJsonFromTenantWithSession(`convos/` + clientPublicHex, this.authToken);
+
+                const instanceOwner = convos.some(convo => convo.io === clientPublicHex);
 
                 this.convos = await Promise.all(convos.map(async convo => {
-                    const oppositePublic = this.admin ? X25519PublicKey.from(await sodium.sodium_hex2bin(convo.id)) : this.serverPublic;
+                    const oppositePublic = this.admin
+                        ? X25519PublicKey.from(await sodium.sodium_hex2bin(instanceOwner ? convo.id : convo.io))
+                        : this.serverPublic;
+
                     return ({
                         id: convo.id,
+                        io: convo.io,
                         entries: (await decryptMessages(this.clientSecret, oppositePublic, convo.messages)).sort((a, b) => b.time - a.time),
+                        fromTenant: instanceOwner && convo.ti && (await sodium.crypto_box_seal_open(await sodium.sodium_hex2bin(convo.ti), this.clientPublic, this.clientSecret)).toString(`utf8`),
                     });
                 }));
             },
 
-            async sendResponse(convoId, replyText, resetInput) {
+            async sendResponse(convo, replyText, resetInput) {
                 // TODO validate input
-                console.log(replyText, convoId);
+                console.log(replyText, convo.id);
 
                 // name seems a bit easy to manipulate
                 const plaintext = Message(this.name, replyText);
-                const conversationKey = this.admin ? X25519PublicKey.from(await sodium.sodium_hex2bin(convoId)) : this.clientPublic;
-                const oppositePublic = this.admin ? conversationKey : this.serverPublic;
+                const conversationKey = this.admin ? X25519PublicKey.from(await sodium.sodium_hex2bin(convo.id)) : this.clientPublic;
+                const oppositePublic = this.admin
+                    ? (convo.id === this.clientPublic.toString(`hex`) ? X25519PublicKey.from(await sodium.sodium_hex2bin(convo.io)) : conversationKey)
+                    : this.serverPublic;
 
                 const payload = await createPayload({
                     plaintext,
@@ -208,7 +229,7 @@ export async function init(sid) {
                 resetInput();
 
                 const [message] = await decryptMessages(this.clientSecret, oppositePublic, [ciphermsg]);
-                this.convos.find(convo => convo.id === convoId).entries.splice(0, 0, message);
+                this.convos.find(c => c.id === convo.id).entries.splice(0, 0, message);
             },
 
             isSelf(name) {
