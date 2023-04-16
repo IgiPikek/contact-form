@@ -1,93 +1,11 @@
+import Conversation from "./components/Conversation.js";
+import ConversationPicker from "./components/ConversationPicker.js";
+
 export async function init(sid) {
     const sodium = await SodiumPlus.auto();
 
     const tenantId = window.location.pathname;
     const getJsonFromTenantWithSession = getJson(tenantId, sid);
-
-    const Conversation = {
-        // TODO lock Send button while waiting for response
-        props: [`convo`],
-        emits: [`reply`],
-        template: `#conversation`,
-        data() {
-            return {
-                replyText: ``,
-            };
-        },
-        methods: {
-            reply() {
-                this.$emit(`reply`, this.convo, this.replyText, () => this.clear());
-            },
-            clear() {
-                this.replyText = ``;
-            },
-            toUTCString: time => new Date(time).toUTCString(),
-        },
-    };
-
-    const ConversationPickerItem = {
-        props: [`convo`, `selected`],
-        template: `#conversation-picker-item`,
-        computed: {
-            convoColor() {
-                const instanceOwner = this.convo.id === this.$root.clientPublic.toString(`hex`);
-                const key = instanceOwner ? this.convo.io : this.convo.id;
-                return `#` + key.slice(0, 6);
-            },
-            convoPartner() {
-                const partnerEntry = this.convo.entries.find(e => !this.$root.isSelf(e.name));
-                return partnerEntry?.name;
-            },
-            lastEntry() {
-                return this.$parent.lastEntry(this.convo.entries);
-            },
-            lastMessage() {
-                return this.lastEntry?.msg;
-            },
-            lastMessageDate() {
-                const entryTime = this.lastEntry?.time;
-                return entryTime && new Date(entryTime).toISOString().substring(0, 10) || `N/A`;
-            },
-            instanceOwner() {
-                return this.convo.id === this.$root.clientPublic.toString(`hex`);
-            },
-            subTenant() {
-                return this.convo.io === this.$root.clientPublic.toString(`hex`);
-            },
-        },
-    };
-
-    const ConversationPicker = {
-        components: {
-            ConversationPickerItem,
-        },
-        props: [`convos`],
-        emits: [`selectionChanged`],
-        template: `#conversation-picker`,
-        data() {
-            return {
-                currentSelection: undefined,
-            };
-        },
-        methods: {
-            lastEntry(entries) {
-                return entries.reduce((greatest, entry) => greatest.time > entry.time ? greatest : entry, {});
-            },
-
-            changeSelection(convo) {
-                if (this.currentSelection === convo) return;
-
-                this.currentSelection = convo;
-                this.$emit(`selectionChanged`, convo);
-            },
-        },
-        computed: {
-            convosSorted() {
-                // Results of `lastEntry` could be cached for higher efficiency.
-                return this.convos.sort((a, b) => this.lastEntry(b.entries).time - this.lastEntry(a.entries).time);
-            },
-        },
-    };
 
 
     Vue.createApp({
