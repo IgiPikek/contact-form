@@ -189,7 +189,7 @@ SodiumPlus.auto().then(async sodium => {
 
     // TODO review whether it wouldn't be better to do https redirect via proxy e.g. nginx or apache
     const httpRedirect = express();
-    httpRedirect.get(`/`, (req, res) => {
+    httpRedirect.get(`/*`, (req, res) => {
         console.log(`host`, req.headers.host, `url`, req.url);
         res.redirect(`https://` + req.headers.host.replace(/\d+$/, env.port) + req.url);
     });
