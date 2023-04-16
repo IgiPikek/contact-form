@@ -113,7 +113,7 @@ export function getApp(sid) {
 
                 state.convos = await Promise.all(convos.map(async convo => {
                     const oppositePublic = state.admin
-                        ? X25519PublicKey.from(await sodium.sodium_hex2bin(state.instanceOwner ? convo.id : convo.io))
+                        ? X25519PublicKey.from(await sodium.sodium_hex2bin(state.instanceOwner ? convo.id : convo.io || convo.id))
                         : state.tenantPublic;
 
                     return ({
