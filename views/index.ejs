@@ -123,27 +123,27 @@
 <div>For: <%= tenant %></div>
 
 <div id="app">
-    <template v-if="currentPage === 'login'">
+    <template v-if="state.currentPage === 'login'">
         <h2>Login</h2>
 
 <!--        <form @submit.prevent="login">-->
-        <form v-if="loginStep === 0" @submit.prevent="toCaptcha">
+        <form v-if="state.loginStep === 0" @submit.prevent="toCaptcha">
             <div>
-                <input type="text" v-model="name" placeholder="Your name" required autofocus>  <!-- TODO maybe minlength -->
+                <input type="text" v-model="state.name" placeholder="Your name" required autofocus>  <!-- TODO maybe minlength -->
             </div>
             <div class="row">
-                <input :type="pwType" v-model="pw" placeholder="Passphrase" required>  <!-- TODO minlength -->
-                <button type="button" @click="togglePw">{{pwBtnText}}</button>
+                <input :type="state.pwType" v-model="state.pw" placeholder="Passphrase" required>  <!-- TODO minlength -->
+                <button type="button" @click="togglePw">{{state.pwBtnText}}</button>
             </div>
             <button type="submit">Next</button>
         </form>
 
-        <form v-if="loginStep === 1" @submit.prevent="login">
+        <form v-if="state.loginStep === 1" @submit.prevent="login">
             <div>Calculate:</div>
             <div class="row">
-                <img :src="tenantId + '/captcha?sid=' + sid" alt="Captcha" width="150" height="50" ref="imgCaptcha">
+                <img :src="state.tenantId + '/captcha?sid=' + sid" alt="Captcha" width="150" height="50" ref="imgCaptcha">
                 <span> = </span>
-                <input type="text" v-model="captcha" ref="inpCaptcha" placeholder="Result" required>
+                <input type="text" v-model="state.captcha" ref="inpCaptcha" placeholder="Result" required>
             </div>
             <button type="submit">Log in</button>
         </form>
@@ -153,24 +153,24 @@
     <template v-if="currentPage === 'login-captcha'">
     </template>
 
-    <template v-if="currentPage === 'messages' && admin">
+    <template v-if="state.currentPage === 'messages' && state.admin">
         <h2>ADMIN PAGE</h2>
         <button @click="getMessages">Refresh</button>
         <div>
-            <Conversation-Picker :convos="convos" @selection-changed="convoChanged"></Conversation-Picker>
+            <Conversation-Picker :convos="state.convos" @selection-changed="convoChanged"></Conversation-Picker>
             <main>
-                <Conversation v-if="selectedConvo" :convo="selectedConvo" @reply="sendResponse"></Conversation>
+                <Conversation v-if="state.selectedConvo" :convo="state.selectedConvo" @reply="sendResponse"></Conversation>
             </main>
         </div>
     </template>
 
-    <template v-if="currentPage === 'messages' && !admin">
+    <template v-if="state.currentPage === 'messages' && !state.admin">
         <h2>Messages</h2>
-        <p>Hello {{name}}</p>
+        <p>Hello {{state.name}}</p>
         <button @click="getMessages">Refresh</button>
 
         <!-- threads, email style -->
-        <template v-for="convo in convos" :key="convo.id">
+        <template v-for="convo in state.convos" :key="convo.id">
             <hr>
             <Conversation :convo="convo" @reply="sendResponse"></Conversation>
         </template>

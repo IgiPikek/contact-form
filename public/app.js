@@ -1,3 +1,5 @@
+import { reactive } from "vue";
+
 import Conversation from "./components/Conversation.js";
 import ConversationPicker from "./components/ConversationPicker.js";
 
@@ -5,52 +7,56 @@ export function getApp(sid) {
     const tenantId = window.location.pathname;
     const getJsonFromTenantWithSession = getJson(tenantId, sid);
 
+    const state = reactive({
+        currentPage: `login`,
+        loginStep: 0,
+
+        name: ``,
+        pw: ``,
+        pwType: `password`,
+        pwBtnText: `Show`,
+        captcha: ``,
+
+        convos: [],
+        selectedConvo: undefined,
+
+        tenantId,
+        tenantPublic: undefined,
+        clientPublic: undefined,
+        clientSecret: undefined,  // not sure whether it should be in vue data. Function scope might be safer
+
+        admin: false,
+        instanceOwner: false,
+    });
+
     return {
         components: {
             Conversation,
             ConversationPicker,
         },
 
-        data() {
+        setup() {
+
             return {
                 sid,
-
-                currentPage: `login`,
-                loginStep: 0,
-
-                name: ``,
-                pw: ``,
-                pwType: `password`,
-                pwBtnText: `Show`,
-                captcha: ``,
-
-                convos: [],
-                selectedConvo: undefined,
-
-                tenantId,
-                tenantPublic: undefined,
-                clientPublic: undefined,
-                clientSecret: undefined,  // not sure whether it should be in vue data. Function scope might be safer
-
-                admin: false,
-                instanceOwner: false,
+                state,
             };
         },
 
         methods: {
 
             togglePw() {
-                if (this.pwType === `text`) {
-                    this.pwType = `password`;
-                    this.pwBtnText = `Show`;
+                if (state.pwType === `text`) {
+                    state.pwType = `password`;
+                    state.pwBtnText = `Show`;
                 } else {
-                    this.pwType = `text`;
-                    this.pwBtnText = `Hide`;
+                    state.pwType = `text`;
+                    state.pwBtnText = `Hide`;
                 }
             },
 
             toCaptcha() {
-                this.loginStep = 1;
+                state.loginStep = 1;
                 this.$nextTick(() => {
                     this.$refs.inpCaptcha.focus();
                 });
@@ -60,8 +66,8 @@ export function getApp(sid) {
                 const encoder = new TextEncoder();
 
                 const seed = encoder.encode(JSON.stringify({
-                    name: this.name.trim().toLowerCase(),
-                    pw: this.pw,
+                    name: state.name.trim().toLowerCase(),
+                    pw: state.pw,
                 }));
                 const clientKeyPair = await sodium.crypto_kx_seed_keypair(seed);
                 const clientPublic = await sodium.crypto_box_publickey(clientKeyPair);
@@ -72,9 +78,9 @@ export function getApp(sid) {
                 console.log({ clientPublic: clientPublic.toString(`hex`), clientSecret: clientSecret.toString(`hex`), pkHash });
 
 
-                const { json: cryptoToken } = await getJsonFromTenantWithSession(`auth?captcha=${this.captcha}&clientPublic=${clientPublic.toString(`hex`)}`)
+                const { json: cryptoToken } = await getJsonFromTenantWithSession(`auth?captcha=${state.captcha}&clientPublic=${clientPublic.toString(`hex`)}`)
                     .catch(() => {
-                        this.captcha = ``;
+                        state.captcha = ``;
                         // Trigger reloading the captcha.
                         this.$refs.imgCaptcha.src = this.$refs.imgCaptcha.src;
                     });
@@ -85,38 +91,38 @@ export function getApp(sid) {
                 const {
                     headers,
                     json: tenantPublicHex,
-                } = await getJsonFromTenantWithSession(`pk?captcha=${this.captcha}&clientPublic=${clientPublic.toString(`hex`)}`, authToken);
+                } = await getJsonFromTenantWithSession(`pk?captcha=${state.captcha}&clientPublic=${clientPublic.toString(`hex`)}`, authToken);
                 // TODO handle failed request
 
                 console.log(tenantPublicHex);
 
-                this.admin = tenantPublicHex === clientPublic.toString(`hex`);
-                this.instanceOwner = headers.get(`role`) === `instanceOwner`;
-                this.authToken = authToken;
+                state.admin = tenantPublicHex === clientPublic.toString(`hex`);
+                state.instanceOwner = headers.get(`role`) === `instanceOwner`;
+                state.authToken = authToken;
 
-                this.tenantPublic = X25519PublicKey.from(await sodium.sodium_hex2bin(tenantPublicHex));
-                this.clientPublic = clientPublic;
-                this.clientSecret = clientSecret;
+                state.tenantPublic = X25519PublicKey.from(await sodium.sodium_hex2bin(tenantPublicHex));
+                state.clientPublic = clientPublic;
+                state.clientSecret = clientSecret;
 
                 await this.getMessages();
 
-                this.currentPage = `messages`;
+                state.currentPage = `messages`;
             },
 
             async getMessages() {
-                const clientPublicHex = this.clientPublic.toString(`hex`);
-                const { json: convos } = await getJsonFromTenantWithSession(`convos/` + clientPublicHex, this.authToken);
+                const clientPublicHex = state.clientPublic.toString(`hex`);
+                const { json: convos } = await getJsonFromTenantWithSession(`convos/` + clientPublicHex, state.authToken);
 
-                this.convos = await Promise.all(convos.map(async convo => {
-                    const oppositePublic = this.admin
-                        ? X25519PublicKey.from(await sodium.sodium_hex2bin(this.instanceOwner ? convo.id : convo.io))
-                        : this.tenantPublic;
+                state.convos = await Promise.all(convos.map(async convo => {
+                    const oppositePublic = state.admin
+                        ? X25519PublicKey.from(await sodium.sodium_hex2bin(state.instanceOwner ? convo.id : convo.io))
+                        : state.tenantPublic;
 
                     return ({
                         id: convo.id,
                         io: convo.io,
-                        entries: (await decryptMessages(this.clientSecret, oppositePublic, convo.messages)).sort((a, b) => b.time - a.time),
-                        fromTenant: this.instanceOwner && convo.ti && (await sodium.crypto_box_seal_open(await sodium.sodium_hex2bin(convo.ti), this.clientPublic, this.clientSecret)).toString(`utf8`),
+                        entries: (await decryptMessages(state.clientSecret, oppositePublic, convo.messages)).sort((a, b) => b.time - a.time),
+                        fromTenant: state.instanceOwner && convo.ti && (await sodium.crypto_box_seal_open(await sodium.sodium_hex2bin(convo.ti), state.clientPublic, state.clientSecret)).toString(`utf8`),
                     });
                 }));
             },
@@ -126,33 +132,33 @@ export function getApp(sid) {
                 console.log(replyText, convo.id);
 
                 // name seems a bit easy to manipulate
-                const plaintext = Message(this.name, replyText);
-                const conversationKey = this.admin ? X25519PublicKey.from(await sodium.sodium_hex2bin(convo.id)) : this.clientPublic;
-                const oppositePublic = this.admin
-                    ? (convo.id === this.clientPublic.toString(`hex`) ? X25519PublicKey.from(await sodium.sodium_hex2bin(convo.io)) : conversationKey)
-                    : this.tenantPublic;
+                const plaintext = Message(state.name, replyText);
+                const conversationKey = state.admin ? X25519PublicKey.from(await sodium.sodium_hex2bin(convo.id)) : state.clientPublic;
+                const oppositePublic = state.admin
+                    ? (convo.id === state.clientPublic.toString(`hex`) ? X25519PublicKey.from(await sodium.sodium_hex2bin(convo.io)) : conversationKey)
+                    : state.tenantPublic;
 
                 const payload = await createPayload({
                     plaintext,
                     conversationKey,
-                    ownSecret: this.clientSecret,
+                    ownSecret: state.clientSecret,
                     oppositePublic,
                 });
 
-                const ciphermsg = await submitResponse(tenantId, payload, this.authToken).then(res => res.text());
+                const ciphermsg = await submitResponse(tenantId, payload, state.authToken).then(res => res.text());
                 console.log(ciphermsg);
                 resetInput();
 
-                const [message] = await decryptMessages(this.clientSecret, oppositePublic, [ciphermsg]);
-                this.convos.find(c => c.id === convo.id).entries.splice(0, 0, message);
+                const [message] = await decryptMessages(state.clientSecret, oppositePublic, [ciphermsg]);
+                state.convos.find(c => c.id === convo.id).entries.splice(0, 0, message);
             },
 
             isSelf(name) {
-                return this.name.toLowerCase() === name.toLowerCase();
+                return state.name.toLowerCase() === name.toLowerCase();
             },
 
             convoChanged(convo) {
-                this.selectedConvo = convo;
+                state.selectedConvo = convo;
             },
         },
     };
