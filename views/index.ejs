@@ -229,23 +229,17 @@
 <%- include("components/_conversation"); %>
 <%- include("components/_conversation-picker"); %>
 
-<script type="importmap">
-    {
-        "imports": {
-        <% if (prod) { %>
-            "vue": "/lib/vue.esm-browser.prod.js"
-        <% } else { %>
-            "vue": "/lib/vue.esm-browser.js"
-        <% } %>
-        }
-    }
-</script>
 
 <script type="module">
-    import { createApp } from "vue";
+    <% if (prod) { %>
+    import * as Vue from "/lib/vue.esm-browser.prod.js";
+    <% } else { %>
+    import * as Vue from "/lib/vue.esm-browser.js";
+    <% } -%>
+
     import { getApp } from "/app.js";
 
-    createApp(getApp(`<%= sid %>`)).mount('#app');
+    Vue.createApp(getApp(Vue, `<%= sid %>`)).mount('#app');
 </script>
 
 

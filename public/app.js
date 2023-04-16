@@ -1,11 +1,9 @@
-import { reactive } from "vue";
-
 import Conversation from "/components/Conversation.js";
 import ConversationPicker from "/components/ConversationPicker.js";
 
 import { userKeys } from "/utils.js";
 
-export function getApp(sid) {
+export function getApp({ reactive }, sid) {
     const [tenantId, entrypoint] = window.location.pathname.slice(1).split(`/`);
     const getJsonFromTenantWithSession = getJson(tenantId, entrypoint, sid);
 
