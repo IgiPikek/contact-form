@@ -11,6 +11,7 @@ const path = require(`path`);
 const { SodiumPlus, X25519PublicKey } = require(`sodium-plus`);
 
 const Session = require(`./session`);
+const tenantCache = require(`./tenantCache`);
 
 const Dirs = {
     Tenants: `tenants`,
@@ -46,8 +47,6 @@ SodiumPlus.auto().then(async sodium => {
 
 
 
-    let tenants;
-
     const requireSession = (req, res, next) => {
         Session.getSession(req.headers.sid || req.query.sid, session => {
             req._session = session;
@@ -67,18 +66,23 @@ SodiumPlus.auto().then(async sodium => {
     };
 
     const validateTenant = async (req, res, next) => {
-        if (!tenants) {
-            tenants = fs.readdirSync(Dirs.Tenants);
-            console.log(`stored tenants from disk:`, tenants);
+        if (tenantCache.isEmpty()) {
+            const tenants = fs.readdirSync(Dirs.Tenants);
+            const pending = fs.readdirSync(Dirs.PendingTenants);
+
+            const activeTenants = tenants.filter(t => !pending.includes(t));
+            tenantCache.add(...activeTenants);
+
+            console.log(`active tenants from disk:`, activeTenants);
         }
 
         const hashedTenant = (await sodium.crypto_generichash(req.params.tenantId.toLowerCase())).toString(`hex`);
-        req._hashedTenant = hashedTenant;
 
         console.log(`validate tenant`, req.params.tenantId, hashedTenant);
 
-        if (!tenants.includes(hashedTenant)) return res.status(404).send();
+        if (!tenantCache.has(hashedTenant)) return res.status(404).send();
 
+        req._hashedTenant = hashedTenant;
         next();
     };
 
@@ -91,7 +95,6 @@ SodiumPlus.auto().then(async sodium => {
 
         const session = Session.newSession();
 
-        // TODO do not render pending tenants. Trying to log into pending tenant throws error because public key doesn't exist yet.
         res.render(`index`, { tenant: req.params.tenantId, sid: session.id, prod: env.prod });
     });
 
@@ -217,7 +220,7 @@ SodiumPlus.auto().then(async sodium => {
         fs.writeFileSync(Dirs.TenantPublicKeyFile(tenantHash), `module.exports = "${req.body.pk}";\n`);
         fs.rmSync(Dirs.PendingTenant(tenantHash));
 
-        // TODO NEXT update in-memory 'tenants' reference
+        tenantCache.invalidate();
 
         res.send(`/` + tenant);
     });
