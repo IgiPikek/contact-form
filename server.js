@@ -33,6 +33,10 @@ SodiumPlus.auto().then(async sodium => {
 
     app.use(express.json({ limit: `11mb` }));
 
+    app.use((req, res, next) => {
+        res.removeHeader('X-Powered-By');
+        next();
+    });
 
 
     const requireSession = (req, res, next) => {
