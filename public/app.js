@@ -113,11 +113,12 @@ export async function init(sid) {
                 selectedConvo: undefined,
 
                 tenantId,
-                serverPublic: undefined,
+                tenantPublic: undefined,
                 clientPublic: undefined,
                 clientSecret: undefined,  // not sure whether it should be in vue data. Function scope might be safer
 
                 admin: false,
+                instanceOwner: false,
             };
         },
 
@@ -156,7 +157,7 @@ export async function init(sid) {
                 console.log({ clientPublic: clientPublic.toString(`hex`), clientSecret: clientSecret.toString(`hex`), pkHash });
 
 
-                const cryptoToken = await getJsonFromTenantWithSession(`auth?captcha=${this.captcha}&clientPublic=${clientPublic.toString(`hex`)}`)
+                const { json: cryptoToken } = await getJsonFromTenantWithSession(`auth?captcha=${this.captcha}&clientPublic=${clientPublic.toString(`hex`)}`)
                     .catch(() => {
                         this.captcha = ``;
                         // Trigger reloading the captcha.
@@ -166,20 +167,21 @@ export async function init(sid) {
                 if (!cryptoToken) return;
 
                 const authToken = (await sodium.crypto_box_seal_open(await sodium.sodium_hex2bin(cryptoToken), clientPublic, clientSecret)).toString(`hex`);
-
-                this.authToken = authToken;
-
-                const serverPublicHex = await getJsonFromTenantWithSession(`pk?captcha=${this.captcha}&clientPublic=${clientPublic.toString(`hex`)}`, authToken);
-
+                const {
+                    headers,
+                    json: tenantPublicHex,
+                } = await getJsonFromTenantWithSession(`pk?captcha=${this.captcha}&clientPublic=${clientPublic.toString(`hex`)}`, authToken);
                 // TODO handle failed request
 
-                console.log(serverPublicHex);
+                console.log(tenantPublicHex);
 
-                this.serverPublic = X25519PublicKey.from(await sodium.sodium_hex2bin(serverPublicHex));
+                this.admin = tenantPublicHex === clientPublic.toString(`hex`);
+                this.instanceOwner = headers.get(`role`) === `instanceOwner`;
+                this.authToken = authToken;
+
+                this.tenantPublic = X25519PublicKey.from(await sodium.sodium_hex2bin(tenantPublicHex));
                 this.clientPublic = clientPublic;
                 this.clientSecret = clientSecret;
-
-                this.admin = serverPublicHex === clientPublic.toString(`hex`);
 
                 await this.getMessages();
 
@@ -188,20 +190,18 @@ export async function init(sid) {
 
             async getMessages() {
                 const clientPublicHex = this.clientPublic.toString(`hex`);
-                const convos = await getJsonFromTenantWithSession(`convos/` + clientPublicHex, this.authToken);
-
-                const instanceOwner = convos.some(convo => convo.io === clientPublicHex);
+                const { json: convos } = await getJsonFromTenantWithSession(`convos/` + clientPublicHex, this.authToken);
 
                 this.convos = await Promise.all(convos.map(async convo => {
                     const oppositePublic = this.admin
-                        ? X25519PublicKey.from(await sodium.sodium_hex2bin(instanceOwner ? convo.id : convo.io))
-                        : this.serverPublic;
+                        ? X25519PublicKey.from(await sodium.sodium_hex2bin(this.instanceOwner ? convo.id : convo.io))
+                        : this.tenantPublic;
 
                     return ({
                         id: convo.id,
                         io: convo.io,
                         entries: (await decryptMessages(this.clientSecret, oppositePublic, convo.messages)).sort((a, b) => b.time - a.time),
-                        fromTenant: instanceOwner && convo.ti && (await sodium.crypto_box_seal_open(await sodium.sodium_hex2bin(convo.ti), this.clientPublic, this.clientSecret)).toString(`utf8`),
+                        fromTenant: this.instanceOwner && convo.ti && (await sodium.crypto_box_seal_open(await sodium.sodium_hex2bin(convo.ti), this.clientPublic, this.clientSecret)).toString(`utf8`),
                     });
                 }));
             },
@@ -215,7 +215,7 @@ export async function init(sid) {
                 const conversationKey = this.admin ? X25519PublicKey.from(await sodium.sodium_hex2bin(convo.id)) : this.clientPublic;
                 const oppositePublic = this.admin
                     ? (convo.id === this.clientPublic.toString(`hex`) ? X25519PublicKey.from(await sodium.sodium_hex2bin(convo.io)) : conversationKey)
-                    : this.serverPublic;
+                    : this.tenantPublic;
 
                 const payload = await createPayload({
                     plaintext,
@@ -293,7 +293,7 @@ export async function init(sid) {
     }
 
     function getJson(tenantId, sid) {
-        return (url, authToken = undefined) => {
+        return async (url, authToken = undefined) => {
             const headers = {
                 "Content-Type": `application/json`,
                 sid,
@@ -301,7 +301,12 @@ export async function init(sid) {
             if (authToken) {
                 headers.Authorization = authToken;
             }
-            return fetch(tenantId + `/` + url, { headers }).then(res => res.json());
+
+            const res = await fetch(tenantId + `/` + url, { headers });
+            return {
+                headers: res.headers,
+                json: await res.json(),
+            };
         };
     }
 }

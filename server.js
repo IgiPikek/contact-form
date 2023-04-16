@@ -126,6 +126,7 @@ SodiumPlus.auto().then(async sodium => {
 
             if (_session.instanceOwner) {
                 console.log(`- instance owner -`);
+                res.setHeader(`role`, `instanceOwner`);
             }
         }
 
