@@ -45,6 +45,10 @@ export function getApp(sid) {
 
         methods: {
 
+            goToPage(page) {
+                this.state.currentPage = page;
+            },
+
             togglePw() {
                 if (state.pwType === `text`) {
                     state.pwType = `password`;
@@ -106,7 +110,7 @@ export function getApp(sid) {
 
                 await this.getMessages();
 
-                state.currentPage = `messages`;
+                this.goToPage(`messages`);
             },
 
             async getMessages() {
