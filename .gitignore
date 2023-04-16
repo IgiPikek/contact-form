@@ -1,0 +1,11 @@
+.idea/
+
+node_modules/
+
+!.gitkeep
+
+/local-notes/
+.env
+.pk
+.pem
+.pub
