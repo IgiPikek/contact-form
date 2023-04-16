@@ -1,14 +1,11 @@
 import Conversation from "./components/Conversation.js";
 import ConversationPicker from "./components/ConversationPicker.js";
 
-export async function init(sid) {
-    const sodium = await SodiumPlus.auto();
-
+export function getApp(sid) {
     const tenantId = window.location.pathname;
     const getJsonFromTenantWithSession = getJson(tenantId, sid);
 
-
-    Vue.createApp({
+    return {
         components: {
             Conversation,
             ConversationPicker,
@@ -158,7 +155,7 @@ export async function init(sid) {
                 this.selectedConvo = convo;
             },
         },
-    }).mount('#app');
+    };
 
 
     async function decryptMessages(ownSecret, oppositePublic, messages) {

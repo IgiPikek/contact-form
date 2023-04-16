@@ -116,11 +116,6 @@
         }
     </style>
     <script src="/lib/sodium-plus.js"></script>
-    <% if (prod) { %>
-    <script src="/lib/vue.global.prod.js"></script>
-    <% } else { %>
-    <script src="/lib/vue.global.js"></script>
-    <% } %>
 </head>
 
 <body>
@@ -186,11 +181,23 @@
 <%- include("components/_conversation"); %>
 <%- include("components/_conversation-picker"); %>
 
-<script type="module">
-    // TODO rename file
-    import { init } from "./app.js";
+<script type="importmap">
+    {
+        "imports": {
+        <% if (prod) { %>
+            "vue": "/lib/vue.esm-browser.prod.js"
+        <% } else { %>
+            "vue": "/lib/vue.esm-browser.js"
+        <% } %>
+        }
+    }
+</script>
 
-    init(`<%= sid %>`);
+<script type="module">
+    import { createApp } from "vue";
+    import { getApp } from "./app.js";
+
+    createApp(getApp(`<%= sid %>`)).mount('#app');
 </script>
 
 
