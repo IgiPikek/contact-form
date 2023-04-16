@@ -11,19 +11,10 @@ const path = require(`path`);
 const { SodiumPlus, X25519PublicKey } = require(`sodium-plus`);
 
 const Session = require(`./session`);
+const DataAccess = require(`./dataAccess`);
 const tenantCache = require(`./tenantCache`);
 
 const Dirs = {
-    Tenants: `tenants`,
-    Tenant: tenantHash => path.join(Dirs.Tenants, tenantHash),
-    TenantPublicKeyFile: tenantHash => path.join(Dirs.Tenant(tenantHash), `key`, `publicKey.js`),
-    TenantConversations: tenantHash => path.join(Dirs.Tenant(tenantHash), `conversations`),
-    TenantConversation: (tenantHash, convoId) => path.join(Dirs.TenantConversations(tenantHash), convoId),
-    TenantMessage: (tenantHash, convoId, messageHash) => path.join(Dirs.TenantConversations(tenantHash), convoId, messageHash),
-
-    PendingTenants: `pending-tenants`,
-    PendingTenant: tenantHash => path.join(Dirs.PendingTenants, tenantHash),
-
     Public: path.join(__dirname, `public`),
     Views: path.join(__dirname, `views`),
 };
@@ -67,10 +58,7 @@ SodiumPlus.auto().then(async sodium => {
 
     const validateTenant = async (req, res, next) => {
         if (tenantCache.isEmpty()) {
-            const tenants = fs.readdirSync(Dirs.Tenants);
-            const pending = fs.readdirSync(Dirs.PendingTenants);
-
-            const activeTenants = tenants.filter(t => !pending.includes(t));
+            const activeTenants = DataAccess.activeTenants();
             tenantCache.add(...activeTenants);
 
             console.log(`active tenants from disk:`, activeTenants);
@@ -126,7 +114,7 @@ SodiumPlus.auto().then(async sodium => {
     app.get(tenant(`/pk`), requireSession, validateTenant, withAuthRest, ({ query, _session, _hashedTenant }, res) => {
         console.log(query, _session.captcha);
 
-        const publicKeyRaw = require(`.` + path.sep + Dirs.TenantPublicKeyFile(_hashedTenant));
+        const publicKeyRaw = DataAccess.tenantPk(_hashedTenant);
 
         // this field is probably not strictly necessary, but it might make the distinction between admin and visitors more obvious
         _session.admin = query.clientPublic === publicKeyRaw;
@@ -136,12 +124,12 @@ SodiumPlus.auto().then(async sodium => {
     });
 
     app.get(tenant(`/convos/:convoId`), requireSession, validateTenant, withAuthRest, ({ _session, params, _hashedTenant }, res) => {
-        const convoDirs = fs.readdirSync(Dirs.TenantConversations(_hashedTenant));
+        const convoDirs = DataAccess.tenantConversations(_hashedTenant);
 
         if (_session.admin) {
             const convos = convoDirs.map(convoId => Conversation(
                 convoId,
-                readFilesSync(Dirs.TenantConversation(_hashedTenant, convoId))
+                DataAccess.convoMessages(_hashedTenant, convoId)
             ));
             return res.json(convos);
         }
@@ -152,8 +140,7 @@ SodiumPlus.auto().then(async sodium => {
             return res.json([Conversation(convoId)]);
         }
 
-        const messages = readFilesSync(Dirs.TenantConversation(_hashedTenant, convoId));
-
+        const messages = DataAccess.convoMessages(_hashedTenant, convoId);
         const convo = Conversation(convoId, messages);
 
         console.log(convo);
@@ -178,8 +165,7 @@ SodiumPlus.auto().then(async sodium => {
         const dataHash = (await sodium.crypto_generichash(serialized)).toString(`hex`);
         console.log(dataHash);
 
-        fs.mkdirSync(Dirs.TenantConversation(_hashedTenant, convoId), { recursive: true });
-        fs.writeFileSync(Dirs.TenantMessage(_hashedTenant, convoId, dataHash), serialized);
+        DataAccess.storeMessage(_hashedTenant, convoId, dataHash, serialized);
 
         res.send(serialized);
     });
@@ -191,7 +177,7 @@ SodiumPlus.auto().then(async sodium => {
         const tenant = req.params.tenant;
         const tenantHash = (await sodium.crypto_generichash(tenant)).toString(`hex`);
 
-        if (!fs.readdirSync(Dirs.PendingTenants).includes(tenantHash)) {
+        if (!DataAccess.tenantPending(tenantHash)) {
             return res.status(400).send();
         }
 
@@ -213,12 +199,11 @@ SodiumPlus.auto().then(async sodium => {
         const tenant = req.params.tenant;
         const tenantHash = (await sodium.crypto_generichash(tenant)).toString(`hex`);
 
-        if (!fs.readdirSync(Dirs.PendingTenants).includes(tenantHash)) {
+        if (!DataAccess.tenantPending(tenantHash)) {
             return res.status(400).send();
         }
 
-        fs.writeFileSync(Dirs.TenantPublicKeyFile(tenantHash), `module.exports = "${req.body.pk}";\n`);
-        fs.rmSync(Dirs.PendingTenant(tenantHash));
+        DataAccess.createTenant(tenantHash, req.body.pk);
 
         tenantCache.invalidate();
 
@@ -228,10 +213,6 @@ SodiumPlus.auto().then(async sodium => {
 
     function Conversation(id, messages = []) {
         return { id, messages };
-    }
-    function readFilesSync(dir) {
-        return fs.readdirSync(dir)
-            .map(file => fs.readFileSync(path.join(dir, file), `utf8`));
     }
 
 
