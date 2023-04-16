@@ -80,10 +80,17 @@ const cmdDelete = {
         // TODO centralise hash(str.toLower). It's too easy to forget.
         const hashHex = (await sodium.crypto_generichash(tenant.toLowerCase())).toString(`hex`);
 
-        const tenantDir = path.join(`tenants`, hashHex);
+        const tenantDir = path.join(__dirname, `tenants`, hashHex);
 
-        fs.rmSync(tenantDir, { recursive: true, force: true });
+        try {
+            // If tenant is pending, there is no key file yet and `require` would fail.
+            const tenantKey = require(path.join(tenantDir, `key`, `publicKey.js`));
+            fs.rmSync(path.join(`inter-tenant`, `conversations`, tenantKey), { recursive: true, force: true });
+        } catch {
+        }
+
         fs.rmSync(path.join(`pending-tenants`, hashHex), { force: true });
+        fs.rmSync(tenantDir, { recursive: true, force: true });
 
         console.log(`Deleted tenant '${tenant}' (${hashHex})`);
     },
