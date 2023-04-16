@@ -5,21 +5,83 @@
     <title>Contact Form - Tenant Setup</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
-    <script src="/lib/sodium-plus.js"></script>
+    <script src="/lib/sodium-plus.min.js"></script>
+
+    <style>
+        body {
+            font-family: sans-serif;
+        }
+        h1 {
+            font-size: 1.5rem;
+        }
+        section {
+            margin-bottom: 1rem;
+        }
+        label > span {
+            display: block;
+        }
+        input, button {
+            padding: 8px;
+        }
+        .passphrase input,
+        .message input {
+            width: 24rem;
+        }
+        table {
+            border-spacing: 0;
+        }
+        .entrypoint-preview {
+            font-style: italic;
+        }
+    </style>
 </head>
 
 <body>
 
-<p>Setup new tenant '<%= tenant %>'</p>
+<h1>Setup new tenant '<%= tenant %>'</h1>
 
 <form method="post">
-    <div>
-        <input type="text" name="name" placeholder="Your name" required autofocus>
-        <input type="password" name="pw" placeholder="Passphrase" required>
-        <input type="password" name="pw2" placeholder="Passphrase (repeat)" required>
-    </div>
-    <input type="text" name="msg" placeholder="Message to owner" required>
-    <input type="submit" value="Create tenant">
+    <section>
+        <label>
+            <span>This <strong>name</strong> will be displayed to your visitors. (No surrounding white space)</span>
+            <input type="text" name="name" placeholder="Your name" required autofocus>
+        </label>
+    </section>
+    <section class="passphrase pw1">
+        <label>
+            <span>Your <strong>passphrase</strong> (longer is better)</span>
+            <input type="password" name="pw1" placeholder="Passphrase" required>
+            <button type="button">Show</button>
+        </label>
+    </section>
+    <section class="passphrase">
+        <label>
+            <span>Repeat your <strong>passphrase</strong>.</span>
+            <input type="password" name="pw2" placeholder="Passphrase (repeat)" required>
+        </label>
+    </section>
+    <section>
+        <label>
+            <span>Name the <strong>entrypoint</strong> through which you want to reach your contact form.<br>
+                You should only use this for yourself. You can create more entrypoints for sharing with visitors later.</span>
+            <input type="text" name="entrypoint" placeholder="Entrypoint" pattern="[a-z\d_-]+" required>
+        </label>
+        <table>
+            <tr>
+                <td>Your URL:</td>
+                <td><span class="entrypoint-preview" hidden>/<%= tenant %>/{{entrypoint}}</span></td>
+            </tr>
+        </table>
+    </section>
+    <section class="message">
+        <label>
+            <span>Send a <strong>message</strong> to the owner who invited you to this contact form.</span>
+        </label>
+        <input type="text" name="msg" placeholder="Message to owner" required>
+    </section>
+    <section>
+        <input type="submit" value="Create tenant" disabled>
+    </section>
 </form>
 
 <script type="module">
@@ -28,23 +90,21 @@
     document.querySelector(`form`).addEventListener(`submit`, async e => {
         e.preventDefault();
 
-        const form = e.target;
-
-        const name = form.name.value;
-        const pw = form.pw.value;
-        const pw2 = form.pw2.value;
-        const msg = form.msg.value;
-
-        if (!name || !pw || !pw2 || !msg) {
-            return alert(`All fields are required.`);
-        }
-        if (pw !== pw2) {
-            alert(`Passphrase and Passphrase (repeat) don't match.`);
-            form.pw2.focus();
+        if (!checkCustomValidity()) {
+            alert(`Some inputs are invalid.`);
             return;
         }
 
-        const keys = await userKeys(name, pw);
+
+        const form = e.target;
+
+        form.querySelector(`[type=submit]`).disabled = true;
+
+        const name = form.name.value;
+        const pw1 = form.pw1.value;
+        const msg = form.msg.value;
+
+        const keys = await userKeys(name, pw1);
         const message = JSON.stringify({ name, msg });
         const nonce = await sodium.randombytes_buf(sodium.CRYPTO_BOX_NONCEBYTES);
         const instanceOwnerPk = X25519PublicKey.from(await sodium.sodium_hex2bin(`<%- instanceOwnerPk %>`));
@@ -56,6 +116,7 @@
             instanceOwnerPk
         );
 
+        // TODO send entrypoint
         const res = await fetch(``, {
             method: `post`,
             credentials: `include`,
@@ -92,6 +153,64 @@
             clientPublic,
             clientSecret,
         };
+    }
+
+
+    // Form validation
+
+    const previewOutput = document.querySelector(`.entrypoint-preview`);
+    const previewTemplate = previewOutput.innerText;
+    const pattern = /[a-z\d_-]/i;
+    const patternInverted = /[^a-z\d_-]/i;
+
+
+    document.querySelector(`input[name=name]`).addEventListener(`change`, e => {
+        e.target.value = e.target.value.trim();
+    });
+
+    document.querySelector(`input[name=entrypoint]`).addEventListener(`input`, () => {
+        previewOutput.hidden = false;
+    }, { once: true });
+
+    document.querySelector(`input[name=entrypoint]`).addEventListener(`input`, e => {
+        if (!pattern.test(e.data)) {
+            e.target.value = e.target.value.replace(patternInverted, ``);
+            return;
+        }
+        previewOutput.innerText = window.location.host + previewTemplate.replace(/{{entrypoint}}/, e.target.value);
+    });
+
+
+    const form = document.querySelector(`form`);
+
+    document.querySelector(`.passphrase.pw1`).addEventListener(`click`, e => {
+        // Toggle passphrase visibility
+        if (e.target.type !== `button`) return;
+
+        const show = e.target.innerText === `Show`;
+
+        e.target.innerText = show ? `Hide` : `Show`;
+        form.pw1.type = show ? `text` : `password`;
+        form.pw2.disabled = show;
+
+        checkCustomValidity();
+    });
+
+
+    const btnSubmit = document.querySelector(`input[type=submit]`);
+
+    form.addEventListener(`input`, e => {
+        if (e.target.tagName !== `INPUT`) return;
+
+        checkCustomValidity();
+    });
+
+    function checkCustomValidity() {
+        const valid = form.checkValidity()
+            && (form.pw2.disabled || form.pw1.value === form.pw2.value);
+
+        btnSubmit.disabled = !valid;
+        return valid;
     }
 </script>
 
