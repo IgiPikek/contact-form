@@ -1,13 +1,13 @@
 import { reactive } from "vue";
 
-import Conversation from "./components/Conversation.js";
-import ConversationPicker from "./components/ConversationPicker.js";
+import Conversation from "/components/Conversation.js";
+import ConversationPicker from "/components/ConversationPicker.js";
 
 import { userKeys } from "/utils.js";
 
 export function getApp(sid) {
-    const tenantId = window.location.pathname;
-    const getJsonFromTenantWithSession = getJson(tenantId, sid);
+    const [tenantId, entrypoint] = window.location.pathname.slice(1).split(`/`);
+    const getJsonFromTenantWithSession = getJson(tenantId, entrypoint, sid);
 
     const state = reactive({
         currentPage: `login`,
@@ -23,12 +23,19 @@ export function getApp(sid) {
         selectedConvo: undefined,
 
         tenantId,
+        entrypoint,
+
         tenantPublic: undefined,
         clientPublic: undefined,
         clientSecret: undefined,  // not sure whether it should be in vue data. Function scope might be safer
 
         admin: false,
         instanceOwner: false,
+
+        entrypoints: [],
+
+        waitingCreateEntrypoint: false,
+        newEntrypointValid: false,
     });
 
     return {
@@ -47,8 +54,16 @@ export function getApp(sid) {
 
         methods: {
 
-            goToPage(page) {
+            async goToPage(page) {
                 this.state.currentPage = page;
+
+                if (page === `messages`) {
+                    await this.getMessages();
+                }
+                else if (page === `settings`) {
+                    const epsRaw = await getEntrypoints(state.tenantPublic.toString(`hex`), state.authToken);
+                    state.entrypoints = await decryptEntrypoints(epsRaw);
+                }
             },
 
             togglePw() {
@@ -69,7 +84,7 @@ export function getApp(sid) {
             },
 
             async login() {
-                const { clientPublic, clientSecret } = await userKeys(sodium, state.name, state.pw);
+                const { clientPublic, clientSecret } = await userKeys(sodium, state.name, state.pw, state.tenantId, state.entrypoint);
 
                 const pkHash = (await sodium.crypto_generichash(clientPublic.getBuffer())).toString(`hex`);
 
@@ -102,8 +117,6 @@ export function getApp(sid) {
                 state.clientPublic = clientPublic;
                 state.clientSecret = clientSecret;
 
-                await this.getMessages();
-
                 this.goToPage(`messages`);
             },
 
@@ -116,18 +129,23 @@ export function getApp(sid) {
                         ? X25519PublicKey.from(await sodium.sodium_hex2bin(state.instanceOwner ? convo.id : convo.io || convo.id))
                         : state.tenantPublic;
 
+                    const entrypoint = convo.epId && (await sodium.crypto_box_seal_open(await sodium.sodium_hex2bin(convo.epId), state.clientPublic, state.clientSecret)).toString(`utf8`);
+                    const epHash = entrypoint && (await sodium.crypto_generichash(entrypoint)).toString(`hex`);
+
                     return ({
                         id: convo.id,
                         io: convo.io,
                         entries: (await decryptMessages(state.clientSecret, oppositePublic, convo.messages)).sort((a, b) => b.time - a.time),
                         fromTenant: state.instanceOwner && convo.ti && (await sodium.crypto_box_seal_open(await sodium.sodium_hex2bin(convo.ti), state.clientPublic, state.clientSecret)).toString(`utf8`),
+                        entrypoint,
+                        epHash,
                     });
                 }));
             },
 
             async sendResponse(convo, replyText, resetInput) {
                 // TODO validate input
-                console.log(replyText, convo.id);
+                console.log(replyText, convo);
 
                 // name seems a bit easy to manipulate
                 const plaintext = Message(state.name, replyText);
@@ -136,14 +154,17 @@ export function getApp(sid) {
                     ? (convo.id === state.clientPublic.toString(`hex`) ? X25519PublicKey.from(await sodium.sodium_hex2bin(convo.io)) : conversationKey)
                     : state.tenantPublic;
 
-                const payload = await createPayload({
-                    plaintext,
-                    conversationKey,
-                    ownSecret: state.clientSecret,
-                    oppositePublic,
+                const payload = JSON.stringify({
+                    epHash: convo.epHash,  // only available if admin and not inter-tenant
+                    encryptedMessage: await createPayload({
+                        plaintext,
+                        conversationKey,
+                        ownSecret: state.clientSecret,
+                        oppositePublic,
+                    }),
                 });
 
-                const ciphermsg = await submitResponse(tenantId, payload, state.authToken).then(res => res.text());
+                const ciphermsg = await submitResponse(tenantId, entrypoint, payload, state.authToken).then(res => res.text());
                 console.log(ciphermsg);
                 resetInput();
 
@@ -157,6 +178,35 @@ export function getApp(sid) {
 
             convoChanged(convo) {
                 state.selectedConvo = convo;
+            },
+
+            async createEntrypoint(entrypoint) {
+                state.waitingCreateEntrypoint = true;
+
+                try {
+                    const epsRaw = await createEntrypoint(entrypoint, state.tenantPublic.toString(`hex`), state.authToken);
+                    state.entrypoints = await decryptEntrypoints(epsRaw);
+
+                    this.newEp = ``;
+                }
+                finally {
+                    state.waitingCreateEntrypoint = false;
+                }
+            },
+
+            async deleteEntrypoint(event, entrypoint) {
+                try {
+                    event.target.disabled = true;
+                    const epsRaw = await deleteEntrypoint(entrypoint, state.authToken);
+                    state.entrypoints = await decryptEntrypoints(epsRaw);
+                }
+                finally {
+                    event.target.disabled = false;
+                }
+            },
+
+            validateNewEntrypoint(event) {
+                state.newEntrypointValid = event.target.checkValidity() && !state.entrypoints.includes(this.newEp);
             },
         },
     };
@@ -192,15 +242,15 @@ export function getApp(sid) {
         const nonce = await sodium.randombytes_buf(sodium.CRYPTO_BOX_NONCEBYTES);
         const ciphertext = await sodium.crypto_box(plaintext, nonce, ownSecret, oppositePublic);
 
-        return JSON.stringify({
+        return {
             k: conversationKey.toString(`hex`),
             n: nonce.toString(`hex`),
             m: ciphertext.toString(`hex`),
-        });
+        };
     }
 
-    function submitResponse(tenantId, payload, authToken) {
-        return fetch(`${tenantId}/message`, {
+    function submitResponse(tenantId, entrypoint, payload, authToken) {
+        return fetch(`/${tenantId}/${entrypoint}/message`, {
             method: `post`,
             headers: {
                 "Authorization": authToken,
@@ -211,7 +261,7 @@ export function getApp(sid) {
         });
     }
 
-    function getJson(tenantId, sid) {
+    function getJson(tenantId, entrypoint, sid) {
         return async (url, authToken = undefined) => {
             const headers = {
                 "Content-Type": `application/json`,
@@ -221,11 +271,58 @@ export function getApp(sid) {
                 headers.Authorization = authToken;
             }
 
-            const res = await fetch(tenantId + `/` + url, { headers });
+            const res = await fetch(`/${tenantId}/${entrypoint}/${url}`, { headers });
             return {
                 headers: res.headers,
                 json: await res.json(),
             };
         };
+    }
+
+    function createEntrypoint(newEntrypoint, tenantPk, authToken) {
+        return fetch(`/${tenantId}/${entrypoint}/entrypoint`, {
+            method: `put`,
+            headers: {
+                "Authorization": authToken,
+                "Content-Type": `application/json`,
+                sid,
+            },
+            body: JSON.stringify({
+                entrypoint: newEntrypoint,
+                tenantPk,
+            }),
+        }).then(res => res.json());
+    }
+
+    function deleteEntrypoint(epToDelete, authToken) {
+        return fetch(`/${tenantId}/${entrypoint}/entrypoint`, {
+            method: `delete`,
+            headers: {
+                "Authorization": authToken,
+                "Content-Type": `application/json`,
+                sid,
+            },
+            body: JSON.stringify({
+                entrypoint: epToDelete,
+            }),
+        }).then(res => res.json());
+    }
+
+    function getEntrypoints(tenantPk, authToken) {
+        return fetch(`/${tenantId}/${entrypoint}/entrypoint`, {
+            method: `get`,
+            headers: {
+                "Authorization": authToken,
+                "Content-Type": `application/json`,
+                sid,
+            },
+        }).then(res => res.json());
+    }
+
+    async function decryptEntrypoints(entrypoints) {
+        const epsBytes = await Promise.all(Object.values(entrypoints)
+            .map(async ep => sodium.crypto_box_seal_open(await sodium.sodium_hex2bin(ep), state.clientPublic, state.clientSecret)));
+
+        return epsBytes.map(ep => ep.toString(`utf8`)).sort();
     }
 }

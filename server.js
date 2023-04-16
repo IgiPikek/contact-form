@@ -53,7 +53,10 @@ SodiumPlus.auto().then(async sodium => {
         next();
     };
 
-    const validateTenant = async (req, res, next) => {
+
+    const entrypoint = route => `/:tenantId/:entrypoint${route}`;
+
+    const validateEntrypoint = async (req, res, next) => {
         if (tenantCache.isEmpty()) {
             const activeTenants = DataAccess.activeTenants();
             tenantCache.add(...activeTenants);
@@ -62,116 +65,19 @@ SodiumPlus.auto().then(async sodium => {
         }
 
         const hashedTenant = (await sodium.crypto_generichash(req.params.tenantId.toLowerCase())).toString(`hex`);
+        const hashedEntrypoint = (await sodium.crypto_generichash(req.params.entrypoint.toLowerCase())).toString(`hex`);
 
-        console.log(`validate tenant`, req.params.tenantId, hashedTenant);
+        console.log(`validate tenant`, req.params.tenantId, hashedTenant, req.params.entrypoint, hashedEntrypoint);
 
-        if (!tenantCache.has(hashedTenant)) return res.status(404).send();
+        if (!tenantCache.has(hashedTenant) || !DataAccess.tenantEntrypointExists(hashedTenant, hashedEntrypoint)) {
+            return res.status(404).send();
+        }
 
         req._hashedTenant = hashedTenant;
+        req._hashedEntrypoint = hashedEntrypoint;
+
         next();
     };
-
-
-    const tenant = route => `/:tenantId${route}`;
-
-
-    app.get(tenant(`/`), validateTenant, (req, res) => {
-        console.log(`:tenantId/`, req._hashedTenant);
-
-        const session = Session.newSession();
-
-        res.render(`index`, { tenant: req.params.tenantId, sid: session.id, prod: env.prod });
-    });
-
-    app.get(tenant(`/captcha`), requireSession, validateTenant, (req, res) => {
-        const captcha = svgCaptcha.createMathExpr({ size: 20, noise: 8, mathMax: 12, mathOperator: `+-` });
-        console.log(`captcha`, captcha.text);
-
-        req._session.captcha = captcha.text;
-
-        res.status(200)
-            .type(`svg`)
-            .send(captcha.data);
-    });
-
-    app.get(tenant(`/auth`), requireSession, validateTenant, async ({ query, _session }, res) => {
-        // TODO avoid unlimited retries
-
-        console.log(`captcha expected: ${_session.captcha}, is: ${query.captcha}`);
-        if (!_session.captcha || query.captcha !== _session.captcha) return res.status(400).send();
-
-        const authToken = await sodium.randombytes_buf(32);
-        _session.authToken = authToken.toString(`hex`);
-
-        const cryptoToken = await sodium.crypto_box_seal(authToken, X25519PublicKey.from(await sodium.sodium_hex2bin(query.clientPublic)));
-
-        res.json(cryptoToken.toString(`hex`));
-    });
-
-    app.get(tenant(`/pk`), requireSession, validateTenant, withAuthRest, ({ query, _session, _hashedTenant }, res) => {
-        console.log(query, _session.captcha);
-
-        const publicKeyRaw = DataAccess.tenantPk(_hashedTenant);
-
-        // this field is probably not strictly necessary, but it might make the distinction between admin and visitors more obvious
-        _session.admin = query.clientPublic === publicKeyRaw;
-
-        if (_session.admin) {
-            _session.pk = publicKeyRaw;
-            const ownerKey = DataAccess.instanceOwnerPk();
-            _session.instanceOwner = ownerKey === query.clientPublic;
-
-            if (_session.instanceOwner) {
-                console.log(`- instance owner -`);
-                res.setHeader(`role`, `instanceOwner`);
-            }
-        }
-
-        console.log(`pk raw`, publicKeyRaw);
-        res.json(publicKeyRaw);
-    });
-
-    app.get(tenant(`/convos/:convoId`), requireSession, validateTenant, withAuthRest, ({ _session, params, _hashedTenant }, res) => {
-        const convoDirs = DataAccess.tenantConversations(_hashedTenant);
-
-        if (_session.admin) {
-            const convos = convoDirs.map(convoId => Conversation(
-                convoId,
-                DataAccess.convoMessages(_hashedTenant, convoId)
-            ));
-
-            const interTenant = _session.instanceOwner
-                ? DataAccess.allInterTenantConvos()
-                : [DataAccess.interTenantConvo(_session.pk)];
-
-            return res.json([...convos, ...interTenant]);
-        }
-
-        const convoId = params.convoId;
-
-        if (!convoDirs.includes(convoId)) {
-            return res.json([Conversation(convoId)]);
-        }
-
-        const messages = DataAccess.convoMessages(_hashedTenant, convoId);
-        const convo = Conversation(convoId, messages);
-
-        console.log(convo);
-        return res.json([convo]);
-    });
-
-    app.post(tenant(`/message`), requireSession, validateTenant, withAuthRest, async ({ body, _hashedTenant }, res) => {
-        console.log(`SUBMIT`);
-
-        // TODO validate fields
-        console.log(body);
-
-        // TODO perhaps there is a way to encrypt the data once more in order to hide who sent the message (can be seen from the key)
-        // TODO signing or encrypting the data including the timestamp would be interesting in order to avoid manipulation
-        const serialized = await DataAccess.storeMessage(_hashedTenant, body);
-
-        res.send(serialized);
-    });
 
 
     app.get(`/new/:tenant`, async (req, res) => {
@@ -211,15 +117,167 @@ SodiumPlus.auto().then(async sodium => {
             return res.status(400).send();
         }
 
-        const encryptedMsg = req.body;
-        const encryptedTenantId = await sodium.crypto_box_seal(tenant, X25519PublicKey.from(await sodium.sodium_hex2bin(DataAccess.instanceOwnerPk())));
+        const encryptedMsg = req.body.msg;
+        const entrypoint = req.body.entrypoint;
 
-        DataAccess.createTenant(tenantHash, encryptedMsg.k, encryptedTenantId.toString(`hex`));
+        const instancePk = X25519PublicKey.from(await sodium.sodium_hex2bin(DataAccess.instanceOwnerPk()));
+        const encryptedTenantId = await sodium.crypto_box_seal(tenant, instancePk);
+
+        const entrypointHash = (await sodium.crypto_generichash(entrypoint)).toString(`hex`);
+
+        const tenantPk = X25519PublicKey.from(await sodium.sodium_hex2bin(encryptedMsg.k));
+        const encryptedEntrypoint = await sodium.crypto_box_seal(entrypoint, tenantPk);
+
+        DataAccess.createTenant(tenantHash, encryptedMsg.k, encryptedTenantId.toString(`hex`), entrypointHash, encryptedEntrypoint.toString(`hex`));
         tenantCache.invalidate();
 
         await DataAccess.storeInterTenantMessage(encryptedMsg);
 
-        res.send(`/` + tenant);
+        res.send(`/${tenant}/${entrypoint}`);
+    });
+
+
+    app.get(entrypoint(`/`), validateEntrypoint, (req, res) => {
+        console.log(`:tenantId/:entrypoint`, req._hashedTenant, req._hashedEntrypoint);
+
+        const session = Session.newSession();
+
+        res.render(`index`, { tenant: req.params.tenantId, sid: session.id, prod: env.prod });
+    });
+
+    app.get(entrypoint(`/captcha`), requireSession, validateEntrypoint, (req, res) => {
+        const captcha = svgCaptcha.createMathExpr({ size: 20, noise: 8, mathMax: 12, mathOperator: `+-` });
+        console.log(`captcha`, captcha.text);
+
+        req._session.captcha = captcha.text;
+
+        res.status(200)
+            .type(`svg`)
+            .send(captcha.data);
+    });
+
+    app.get(entrypoint(`/auth`), requireSession, validateEntrypoint, async ({ query, _session }, res) => {
+        // TODO avoid unlimited retries
+
+        console.log(`captcha expected: ${_session.captcha}, is: ${query.captcha}`);
+        if (!_session.captcha || query.captcha !== _session.captcha) return res.status(400).send();
+
+        const authToken = await sodium.randombytes_buf(32);
+        _session.authToken = authToken.toString(`hex`);
+
+        const cryptoToken = await sodium.crypto_box_seal(authToken, X25519PublicKey.from(await sodium.sodium_hex2bin(query.clientPublic)));
+
+        res.json(cryptoToken.toString(`hex`));
+    });
+
+    app.get(entrypoint(`/pk`), requireSession, validateEntrypoint, withAuthRest, ({ query, _session, _hashedTenant }, res) => {
+        console.log(query, _session.captcha);
+
+        const publicKeyRaw = DataAccess.tenantPk(_hashedTenant);
+
+        // this field is probably not strictly necessary, but it might make the distinction between admin and visitors more obvious
+        _session.admin = query.clientPublic === publicKeyRaw;
+
+        if (_session.admin) {
+            _session.pk = publicKeyRaw;
+            const ownerKey = DataAccess.instanceOwnerPk();
+            _session.instanceOwner = ownerKey === query.clientPublic;
+
+            if (_session.instanceOwner) {
+                console.log(`- instance owner -`);
+                res.setHeader(`role`, `instanceOwner`);
+            }
+        }
+
+        console.log(`pk raw`, publicKeyRaw);
+        res.json(publicKeyRaw);
+    });
+
+    app.get(entrypoint(`/convos/:convoId`), requireSession, validateEntrypoint, withAuthRest, ({ _session, params, _hashedTenant, _hashedEntrypoint }, res) => {
+        if (_session.admin) {
+            const convosByEntrypoint = DataAccess.allTenantConvos(_hashedTenant);
+            const convos = convosByEntrypoint.flatMap(({ entrypointHash, epId, convos }) => convos.map(convoId => Conversation(
+                convoId,
+                DataAccess.convoMessages(_hashedTenant, entrypointHash, convoId),
+                epId
+            )));
+
+            const interTenant = _session.instanceOwner
+                ? DataAccess.allInterTenantConvos()
+                : [DataAccess.interTenantConvo(_session.pk)];
+
+            return res.json([...convos, ...interTenant]);
+        }
+
+        const convoDirs = DataAccess.tenantEntrypointConvos(_hashedTenant, _hashedEntrypoint);
+        const convoId = params.convoId;
+
+        if (!convoDirs.includes(convoId)) {
+            return res.json([Conversation(convoId)]);
+        }
+
+        const messages = DataAccess.convoMessages(_hashedTenant, _hashedEntrypoint, convoId);
+        const convo = Conversation(convoId, messages);
+
+        console.log(convo);
+        return res.json([convo]);
+    });
+
+    app.post(entrypoint(`/message`), requireSession, validateEntrypoint, withAuthRest, async ({ _session, body, _hashedTenant, _hashedEntrypoint }, res) => {
+        console.log(`SUBMIT`);
+
+        // TODO validate fields
+        console.log(body);
+
+        // TODO perhaps there is a way to encrypt the data once more in order to hide who sent the message (can be seen from the key)
+        // TODO signing or encrypting the data including the timestamp would be interesting in order to avoid manipulation
+
+        const targetEntrypoint = _session.admin ? body.epHash : _hashedEntrypoint;
+        const serialized = await DataAccess.storeMessage(_hashedTenant, targetEntrypoint, body.encryptedMessage);
+
+        res.send(serialized);
+    });
+
+    app.get(entrypoint(`/entrypoint`), requireSession, validateEntrypoint, withAuthRest, async ({ _session, _hashedTenant, _hashedEntrypoint }, res) => {
+        const entrypoints = DataAccess.tenantEntrypoints(_hashedTenant);
+        res.send(JSON.stringify(entrypoints));
+    });
+
+    app.put(entrypoint(`/entrypoint`), requireSession, validateEntrypoint, withAuthRest, async ({ _session, _hashedTenant, body }, res) => {
+        if (!_session.admin) return res.status(400).send();
+
+        const epToCreate = body.entrypoint;
+        const entrypointHash = (await sodium.crypto_generichash(epToCreate)).toString(`hex`);
+
+        if (DataAccess.tenantEntrypointExists(_hashedTenant, entrypointHash)) {
+            return res.status(400).send();
+        }
+
+        const tenantPk = X25519PublicKey.from(await sodium.sodium_hex2bin(body.tenantPk));
+        const encryptedEntrypoint = await sodium.crypto_box_seal(epToCreate, tenantPk);
+
+        // Caution when using nodemon. Writing to disk restarts server and kills session.
+        DataAccess.createEntrypoint(_hashedTenant, entrypointHash, encryptedEntrypoint.toString(`hex`));
+        const entrypoints = DataAccess.tenantEntrypoints(_hashedTenant);
+
+        res.status(201).send(JSON.stringify(entrypoints));
+    });
+
+    app.delete(entrypoint(`/entrypoint`), requireSession, validateEntrypoint, withAuthRest, async ({ _session, _hashedTenant, body }, res) => {
+        if (!_session.admin) return res.status(400).send();
+
+        const epToDelete = body.entrypoint;
+        const entrypointHash = (await sodium.crypto_generichash(epToDelete)).toString(`hex`);
+
+        DataAccess.deleteEntrypoint(_hashedTenant, entrypointHash);
+        const entrypoints = DataAccess.tenantEntrypoints(_hashedTenant);
+
+        res.status(200).send(JSON.stringify(entrypoints));
+    });
+
+
+    app.all(`*`, (req, res) => {
+        res.end(`doesn't exist`);
     });
 
 
@@ -228,8 +286,8 @@ SodiumPlus.auto().then(async sodium => {
     });
 
 
-    function Conversation(id, messages = []) {
-        return { id, messages };
+    function Conversation(id, messages = [], epId = undefined) {
+        return { id, messages, epId };
     }
 });
 

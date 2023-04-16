@@ -56,7 +56,7 @@ const cmdCreate = {
 
         fs.mkdirSync(tenantDir);
         fs.mkdirSync(path.join(tenantDir, `key`));
-        fs.mkdirSync(path.join(tenantDir, `conversations`));
+        fs.mkdirSync(path.join(tenantDir, `entrypoints`));
 
         fs.writeFileSync(path.join(`pending-tenants`, hashHex), ``);
 

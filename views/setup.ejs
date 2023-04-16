@@ -104,21 +104,22 @@
 
         const name = form.name.value;
         const pw1 = form.pw1.value;
+        const tenant = `<%= tenant %>`;
+        const entrypoint = form.entrypoint.value;
         const msg = form.msg.value;
 
-        const keys = await userKeys(sodium, name, pw1);
+        const keys = await userKeys(sodium, name, pw1, tenant, entrypoint);
         const message = JSON.stringify({ name, msg });
         const nonce = await sodium.randombytes_buf(sodium.CRYPTO_BOX_NONCEBYTES);
         const instanceOwnerPk = X25519PublicKey.from(await sodium.sodium_hex2bin(`<%- instanceOwnerPk %>`));
 
-        const ciphertext = await sodium.crypto_box(
+        const cipherMessage = await sodium.crypto_box(
             new TextEncoder().encode(message),
             nonce,
             keys.clientSecret,
             instanceOwnerPk
         );
 
-        // TODO send entrypoint
         const res = await fetch(``, {
             method: `post`,
             credentials: `include`,
@@ -128,9 +129,12 @@
                 "sid": `<%= sid %>`,
             },
             body: JSON.stringify({
-                k: keys.clientPublic.toString(`hex`),
-                n: nonce.toString(`hex`),
-                m: ciphertext.toString(`hex`),
+                msg: {
+                    k: keys.clientPublic.toString(`hex`),
+                    n: nonce.toString(`hex`),
+                    m: cipherMessage.toString(`hex`),
+                },
+                entrypoint,
             }),
         });
 

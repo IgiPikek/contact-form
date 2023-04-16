@@ -12,6 +12,7 @@
 
             <div v-if="instanceOwner" class="convo-intertenant"><span class="convo-intertenant-tag">Instance owner</span></div>
             <div v-else-if="subTenant" class="convo-intertenant"><span class="convo-intertenant-tag">Tenant: <strong>{{convo.fromTenant}}</strong></span></div>
+            <div v-else class="convo-entrypoint"><span class="convo-entrypoint-tag">Via: <strong>/{{convo.entrypoint}}</strong></span></div>
 
             <div class="last-message">{{lastMessage}}</div>
         </div>

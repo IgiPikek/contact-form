@@ -90,7 +90,8 @@
         .convo-preview .convo-partner {
             font-size: .9em;
         }
-        .convo-preview .convo-intertenant {
+        .convo-preview .convo-intertenant,
+        .convo-preview .convo-entrypoint {
             font-size: .7em;
         }
         .convo-preview .convo-intertenant-tag {
@@ -98,6 +99,12 @@
             background-color: royalblue;
             color: white;
             border: 1px solid blue;
+            border-radius: 2px;
+        }
+        .convo-preview .convo-entrypoint-tag {
+            padding: 2px 4px;
+            background-color: orange;
+            border: 1px solid orangered;
             border-radius: 2px;
         }
         .convo-preview .last-message {
@@ -146,7 +153,7 @@
         <form v-if="state.loginStep === 1" @submit.prevent="login">
             <div>Calculate:</div>
             <div class="row">
-                <img :src="state.tenantId + '/captcha?sid=' + sid" alt="Captcha" width="150" height="50" ref="imgCaptcha">
+                <img :src="'/' + state.tenantId + '/' + state.entrypoint + '/captcha?sid=' + sid" alt="Captcha" width="150" height="50" ref="imgCaptcha">
                 <span> = </span>
                 <input type="text" v-model="state.captcha" ref="inpCaptcha" placeholder="Result" required>
             </div>
@@ -161,6 +168,7 @@
     <template v-if="state.currentPage === 'messages' && state.admin">
         <h2>ADMIN PAGE</h2>
         <button @click="getMessages">Refresh</button>
+        <button @click="goToPage('settings')">Settings</button>
         <div>
             <Conversation-Picker :convos="state.convos" @selection-changed="convoChanged"></Conversation-Picker>
             <main>
@@ -179,6 +187,28 @@
             <hr>
             <Conversation :convo="convo" @reply="sendResponse"></Conversation>
         </template>
+    </template>
+
+    <template v-if="state.currentPage === 'settings' && state.admin">
+        <h2>Settings</h2>
+        <button @click="goToPage('messages')">Back</button>
+
+        <h3>Entry points</h3>
+        <table>
+            <tr v-for="ep in state.entrypoints">
+                <td>{{ep}}</td>
+                <td><button @click="deleteEntrypoint($event, ep)">Delete</button></td>
+            </tr>
+            <tr>
+                <td><input type="text" placeholder="New entry point"
+                           pattern="[a-z\d_-]+" required
+                           v-model.trim="newEp"
+                           @input="validateNewEntrypoint"
+                           :disabled="state.waitingCreateEntrypoint"
+                    ></td>
+                <td><button @click="createEntrypoint(newEp)" :disabled="!state.newEntrypointValid || state.waitingCreateEntrypoint">Create</button></td>
+            </tr>
+        </table>
     </template>
 </div>
 
@@ -200,7 +230,7 @@
 
 <script type="module">
     import { createApp } from "vue";
-    import { getApp } from "./app.js";
+    import { getApp } from "/app.js";
 
     createApp(getApp(`<%= sid %>`)).mount('#app');
 </script>

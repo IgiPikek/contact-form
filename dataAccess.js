@@ -1,13 +1,18 @@
 module.exports = {
     activeTenants,
     allInterTenantConvos,
+    allTenantConvos,
     convoMessages,
+    createEntrypoint,
     createTenant,
+    deleteEntrypoint,
     instanceOwnerPk,
     interTenantConvo,
     storeInterTenantMessage,
     storeMessage,
-    tenantConversations,
+    tenantEntrypointConvos,
+    tenantEntrypointExists,
+    tenantEntrypoints,
     tenantPending,
     tenantPk,
 };
@@ -22,9 +27,12 @@ const Dirs = {
     Tenants: path.join(__dirname, `tenants`),
     Tenant: tenantHash => path.join(Dirs.Tenants, tenantHash),
     TenantPublicKeyFile: tenantHash => path.join(Dirs.Tenant(tenantHash), `key`, `publicKey.js`),
-    TenantConversations: tenantHash => path.join(Dirs.Tenant(tenantHash), `conversations`),
-    TenantConversation: (tenantHash, convoId) => path.join(Dirs.TenantConversations(tenantHash), convoId),
-    TenantMessage: (tenantHash, convoId, messageHash) => path.join(Dirs.TenantConversations(tenantHash), convoId, messageHash),
+    TenantEntrypoints: tenantHash => path.join(Dirs.Tenant(tenantHash), `entrypoints`),
+    TenantEntrypoint: (tenantHash, entrypointHash) => path.join(Dirs.TenantEntrypoints(tenantHash), entrypointHash),
+    TenantEntrypointIdFile: (tenantHash, entrypointHash) => path.join(Dirs.TenantEntrypoint(tenantHash, entrypointHash), `info.js`),
+    TenantEntrypointConversations: (tenantHash, entrypointHash) => path.join(Dirs.TenantEntrypoint(tenantHash, entrypointHash), `conversations`),
+    TenantEntrypointConversation: (tenantHash, entrypointHash, convoId) => path.join(Dirs.TenantEntrypointConversations(tenantHash, entrypointHash), convoId),
+    TenantEntrypointMessage: (tenantHash, entrypointHash, convoId, messageHash) => path.join(Dirs.TenantEntrypointConversation(tenantHash, entrypointHash, convoId), messageHash),
 
     PendingTenants: path.join(__dirname, `pending-tenants`),
     PendingTenant: tenantHash => path.join(Dirs.PendingTenants, tenantHash),
@@ -54,16 +62,36 @@ function allInterTenantConvos() {
         .map(interTenantConvo);
 }
 
-function convoMessages(tenantHash, convoId) {
-    return fs.readdirSync(Dirs.TenantConversation(tenantHash, convoId))
-        .map(file => fs.readFileSync(Dirs.TenantMessage(tenantHash, convoId, file), `utf8`));
+function allTenantConvos(tenantHash) {
+    return fs.readdirSync(Dirs.TenantEntrypoints(tenantHash))
+        .map(ep => ({
+            entrypointHash: ep,
+            epId: require(Dirs.TenantEntrypointIdFile(tenantHash, ep)),
+            convos: tenantEntrypointConvos(tenantHash, ep)
+        }));
 }
 
-function createTenant(tenantHash, tenantPk, encryptedTenantId) {
+function convoMessages(tenantHash, entrypointHash, convoId) {
+    return fs.readdirSync(Dirs.TenantEntrypointConversation(tenantHash, entrypointHash, convoId))
+        .map(file => fs.readFileSync(Dirs.TenantEntrypointMessage(tenantHash, entrypointHash, convoId, file), `utf8`));
+}
+
+function createEntrypoint(tenantHash, entrypointHash, encryptedEntrypoint) {
+    fs.mkdirSync(Dirs.TenantEntrypoint(tenantHash, entrypointHash));
+    fs.mkdirSync(Dirs.TenantEntrypointConversations(tenantHash, entrypointHash));
+    fs.writeFileSync(Dirs.TenantEntrypointIdFile(tenantHash, entrypointHash), `module.exports = "${encryptedEntrypoint}";\n`);
+}
+
+function createTenant(tenantHash, tenantPk, encryptedTenantId, entrypointHash, encryptedEntrypoint) {
     fs.writeFileSync(Dirs.TenantPublicKeyFile(tenantHash), `module.exports = "${tenantPk}";\n`);
     fs.rmSync(Dirs.PendingTenant(tenantHash));
     fs.mkdirSync(Dirs.InterTenantConvo(tenantPk));
     fs.writeFileSync(Dirs.InterTenantIdFile(tenantPk), `module.exports = "${encryptedTenantId}";\n`);
+    createEntrypoint(tenantHash, entrypointHash, encryptedEntrypoint);
+}
+
+function deleteEntrypoint(tenantHash, entrypointHash) {
+    fs.rmSync(Dirs.TenantEntrypoint(tenantHash, entrypointHash), { recursive: true, force: true });
 }
 
 function instanceOwnerPk() {
@@ -97,21 +125,31 @@ async function storeInterTenantMessage(encryptedMsg) {
 }
 
 /// Stores a message in the appropriate regular or inter-tenant conversation.
-async function storeMessage(tenantHash, encryptedMsg) {
+async function storeMessage(tenantHash, entrypointHash, encryptedMsg) {
     if (fs.readdirSync(Dirs.InterTenantConvos).includes(encryptedMsg.k)) {
         return await storeInterTenantMessage(encryptedMsg);
     }
 
     const { convoId, serialized, dataHash } = await serializeEncryptedMsg(encryptedMsg);
 
-    fs.mkdirSync(Dirs.TenantConversation(tenantHash, convoId), { recursive: true });
-    fs.writeFileSync(Dirs.TenantMessage(tenantHash, convoId, dataHash), serialized);
+    fs.mkdirSync(Dirs.TenantEntrypointConversation(tenantHash, entrypointHash, convoId), { recursive: true });
+    fs.writeFileSync(Dirs.TenantEntrypointMessage(tenantHash, entrypointHash, convoId, dataHash), serialized);
 
     return serialized;
 }
 
-function tenantConversations(tenantHash) {
-    return fs.readdirSync(Dirs.TenantConversations(tenantHash));
+function tenantEntrypointConvos(tenantHash, entrypointHash) {
+    return fs.readdirSync(Dirs.TenantEntrypointConversations(tenantHash, entrypointHash));
+}
+
+function tenantEntrypointExists(tenantHash, entrypointHash) {
+    const epHashes = fs.readdirSync(Dirs.TenantEntrypoints(tenantHash));
+    return epHashes.includes(entrypointHash);
+}
+
+function tenantEntrypoints(tenantHash) {
+    const epHashes = fs.readdirSync(Dirs.TenantEntrypoints(tenantHash));
+    return Object.fromEntries(epHashes.map(eph => [eph, require(Dirs.TenantEntrypointIdFile(tenantHash, eph))]))
 }
 
 function tenantPending(tenantHash) {
