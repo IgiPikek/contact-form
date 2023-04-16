@@ -1,11 +1,9 @@
 const env = require(`./env.json`);
-const https = require(`https`);
 const express = require(`express`);
 const app = express();
 
 const svgCaptcha = require(`svg-captcha`);
 
-const fs = require(`fs`);
 const path = require(`path`);
 
 const { SodiumPlus, X25519PublicKey } = require(`sodium-plus`);
@@ -23,7 +21,6 @@ const Dirs = {
 // TODO avoid multiple users using the same name but different passwords. Can cause confusion. Displaying user's public key mitigates.
 
 // TODO trailing '/' causes error
-// TODO test if https redirect implementation is appropriate for live env
 
 
 SodiumPlus.auto().then(async sodium => {
@@ -226,27 +223,13 @@ SodiumPlus.auto().then(async sodium => {
     });
 
 
+    app.listen(env.port, () => {
+        console.log(`Node server listening on port ${env.port}`);
+    });
+
+
     function Conversation(id, messages = []) {
         return { id, messages };
     }
-
-
-    // TODO review whether it wouldn't be better to do https redirect via proxy e.g. nginx or apache
-    const httpRedirect = express();
-    httpRedirect.get(`/*`, (req, res) => {
-        console.log(`host`, req.headers.host, `url`, req.url);
-        res.redirect(`https://` + req.headers.host.replace(/\d+$/, env.port) + req.url);
-    });
-    httpRedirect.listen(env.httpPort, () => {
-        console.log(`HTTP-redirect server running on port ${env.httpPort}`);
-    });
-
-    https.createServer({
-        key: fs.readFileSync(env.ssl.key),
-        cert: fs.readFileSync(env.ssl.cert),
-    }, app).listen(env.port, () => {
-        console.log(`HTTPS server running on port ${env.port}`);
-    });
-
 });
 
