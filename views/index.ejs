@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Contact Form</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <style>
+        .row {
+            margin-bottom: 1em;
+        }
+        .entries {
+            min-width: 400px;
+        }
+        .entry {
+            margin: 1em 0;
+        }
+        .meta {
+            font-size: .8rem;
+            color: #444;
+        }
+        .message {
+            white-space: pre-wrap;
+            display: inline-block;
+            padding: .2em .5em;
+            border-radius: 2px;
+            background-color: #bbc;
+        }
+        .message.self {
+            background-color: #ddc;
+        }
+        section:nth-of-type(2n) {
+            background-color: #eee;
+        }
+    </style>
+    <script src="/lib/sodium-plus.js"></script>
+    <script src="/lib/vue.global.js"></script>
+</head>
+
+<body>
+<h1>Contact form</h1>
+<div>For: <%= tenant %></div>
+
+<div id="app">
+    <template v-if="currentPage === 'login'">
+        <h2>Login</h2>
+
+<!--        <form @submit.prevent="login">-->
+        <form v-if="loginStep === 0" @submit.prevent="toCaptcha">
+            <div>
+                <input type="text" v-model="name" placeholder="Your name" required autofocus>  <!-- TODO maybe minlength -->
+            </div>
+            <div class="row">
+                <input :type="pwType" v-model="pw" placeholder="Passphrase" required>  <!-- TODO minlength -->
+                <button type="button" @click="togglePw">{{pwBtnText}}</button>
+            </div>
+            <button type="submit">Next</button>
+        </form>
+
+        <form v-if="loginStep === 1" @submit.prevent="login">
+            <div>Calculate:</div>
+            <div class="row">
+                <img src="/captcha" ref="imgCaptcha">
+                <span> = </span>
+                <input type="text" v-model="captcha" ref="inpCaptcha" placeholder="Result" required>
+            </div>
+            <button type="submit">Log in</button>
+        </form>
+
+    </template>
+
+    <template v-if="currentPage === 'login-captcha'">
+    </template>
+
+    <template v-if="currentPage === 'messages'">
+        <h2>Messages</h2>
+        <p>{{admin ? "Admin page" : "Hello " + name}}</p>
+        <button @click="getMessages">Refresh</button>
+
+        <!-- threads, email style -->
+        <template v-for="convo in convos" :key="convo.id">
+            <hr>
+            <Conversation :convo="convo" @reply="sendResponse"></Conversation>
+        </template>
+    </template>
+</div>
+
+
+<%- include("components/_conversation"); %>
+
+<script type="module">
+    // TODO rename file
+    import { init } from "./app.js";
+
+    init(`<%= csrf %>`);
+</script>
+
+
+
+</body>
+</html>

@@ -1,0 +1,21 @@
+<template id="conversation">
+<!-- TODO make groups expandable/collapsible -->
+<!-- TODO in collapsed group, show date of last entry -->
+<!-- TODO order groups by date of latest message -->
+<!-- TODO in collapsed group, show one line of latest message -->
+    <section>
+        <div class="meta">{{convo.id}}</div>
+        <div>
+            <!-- TODO autofocus -->
+            <textarea v-model="replyText" cols="50" rows="3"></textarea>
+            <button @click="reply" :disabled="replyText.length === 0">Send</button>
+        </div>
+        <!-- TODO sorting. to allow seamless reading flow from old-to-new and new-to-old -->
+        <div class="entries">
+            <div class="entry" v-for="({ name, time, msg }) in convo.entries">
+                <div class="meta"><strong>{{isSelf(name) ? 'Me' : name}}</strong> at {{toUTCString(time)}}</div>
+                <div class="message" :class="{ self: isSelf(name) }">{{msg}}</div>
+            </div>
+        </div>
+    </section>
+</template>

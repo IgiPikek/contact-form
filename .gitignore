@@ -1,10 +1,15 @@
 .idea/
 
 node_modules/
+*/lib/*
+
+/ssl/*
+/tenants/*
 
 !.gitkeep
 
 /local-notes/
+env.json
 .env
 .pk
 .pem
