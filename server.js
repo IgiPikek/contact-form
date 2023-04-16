@@ -140,7 +140,7 @@ SodiumPlus.auto().then(async sodium => {
         console.log(`:tenantId/`, req._hashedTenant);
 
         // TODO do not render pending tenants. Trying to log into pending tenant throws error because public key doesn't exist yet.
-        res.render(`index`, { tenant: req.params.tenantId, csrf: req.csrfToken() });
+        res.render(`index`, { tenant: req.params.tenantId, csrf: req.csrfToken(), prod: env.prod });
     });
 
     app.get(tenant(`/pk`), validateTenant, withAuthRest, ({ query, session, _hashedTenant }, res) => {

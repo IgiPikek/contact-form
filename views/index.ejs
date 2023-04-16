@@ -101,7 +101,11 @@
         }
     </style>
     <script src="/lib/sodium-plus.js"></script>
+    <% if (prod) { %>
+    <script src="/lib/vue.global.prod.js"></script>
+    <% } else { %>
     <script src="/lib/vue.global.js"></script>
+    <% } %>
 </head>
 
 <body>
