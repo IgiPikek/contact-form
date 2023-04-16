@@ -16,6 +16,7 @@
     <div>
         <input type="text" name="name" placeholder="Your name" required autofocus>
         <input type="password" name="pw" placeholder="Passphrase" required>
+        <input type="password" name="pw2" placeholder="Passphrase (repeat)" required>
     </div>
     <input type="text" name="msg" placeholder="Message to owner" required>
     <input type="submit" value="Create tenant">
@@ -31,10 +32,16 @@
 
         const name = form.name.value;
         const pw = form.pw.value;
+        const pw2 = form.pw2.value;
         const msg = form.msg.value;
 
-        if (!name || !pw || !msg) {
+        if (!name || !pw || !pw2 || !msg) {
             return alert(`All fields are required.`);
+        }
+        if (pw !== pw2) {
+            alert(`Passphrase and Passphrase (repeat) don't match.`);
+            form.pw2.focus();
+            return;
         }
 
         const keys = await userKeys(name, pw);
