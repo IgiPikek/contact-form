@@ -56,7 +56,7 @@ const cmdCreate = {
 
         fs.mkdirSync(tenantDir);
         fs.mkdirSync(path.join(tenantDir, `key`));
-        fs.mkdirSync(path.join(tenantDir, `messages`));
+        fs.mkdirSync(path.join(tenantDir, `conversations`));
 
         fs.writeFileSync(path.join(`pending-tenants`, hashHex), ``);
 
@@ -83,7 +83,7 @@ const cmdDelete = {
         const tenantDir = path.join(`tenants`, hashHex);
 
         fs.rmSync(tenantDir, { recursive: true, force: true });
-        fs.rmSync(path.join(`pending-tenants`, hashHex));
+        fs.rmSync(path.join(`pending-tenants`, hashHex), { force: true });
 
         console.log(`Deleted tenant '${tenant}' (${hashHex})`);
     },

@@ -12,6 +12,21 @@ const path = require(`path`);
 
 const { SodiumPlus, X25519PublicKey } = require(`sodium-plus`);
 
+const Dirs = {
+    Tenants: `tenants`,
+    Tenant: tenantHash => path.join(Dirs.Tenants, tenantHash),
+    TenantPublicKeyFile: tenantHash => path.join(Dirs.Tenant(tenantHash), `key`, `publicKey.js`),
+    TenantConversations: tenantHash => path.join(Dirs.Tenant(tenantHash), `conversations`),
+    TenantConversation: (tenantHash, convoId) => path.join(Dirs.TenantConversations(tenantHash), convoId),
+    TenantMessage: (tenantHash, convoId, messageHash) => path.join(Dirs.TenantConversations(tenantHash), convoId, messageHash),
+
+    PendingTenants: `pending-tenants`,
+    PendingTenant: tenantHash => path.join(Dirs.PendingTenants, tenantHash),
+
+    Public: path.join(__dirname, `public`),
+    Views: path.join(__dirname, `views`),
+};
+
 
 // TODO avoid multiple users using the same name but different passwords. Can cause confusion. Displaying user's public key mitigates.
 
@@ -33,7 +48,7 @@ SodiumPlus.auto().then(async sodium => {
 
 
     app.set(`view engine`, `ejs`);
-    app.set('views', path.join(__dirname, 'views'));
+    app.set('views', Dirs.Views);
 
     app.use(session({
         resave: false,
@@ -45,7 +60,7 @@ SodiumPlus.auto().then(async sodium => {
 
     app.use(csrf({}));
 
-    app.use(express.static(path.join(__dirname, `public`)));
+    app.use(express.static(Dirs.Public));
 
     app.use(express.json());
 
@@ -66,7 +81,7 @@ SodiumPlus.auto().then(async sodium => {
 
     const validateTenant = async (req, res, next) => {
         if (!tenants) {
-            tenants = fs.readdirSync(`tenants`);
+            tenants = fs.readdirSync(Dirs.Tenants);
             console.log(`stored tenants from disk:`, tenants);
         }
 
@@ -110,7 +125,7 @@ SodiumPlus.auto().then(async sodium => {
         const tenant = req.params.tenant;
         const tenantHash = (await sodium.crypto_generichash(tenant)).toString(`hex`);
 
-        if (!fs.readdirSync(`pending-tenants`).includes(tenantHash)) {
+        if (!fs.readdirSync(Dirs.PendingTenants).includes(tenantHash)) {
             return res.status(400).send();
         }
 
@@ -123,12 +138,12 @@ SodiumPlus.auto().then(async sodium => {
         const tenant = req.params.tenant;
         const tenantHash = (await sodium.crypto_generichash(tenant)).toString(`hex`);
 
-        if (!fs.readdirSync(`pending-tenants`).includes(tenantHash)) {
+        if (!fs.readdirSync(Dirs.PendingTenants).includes(tenantHash)) {
             return res.status(400).send();
         }
 
-        fs.writeFileSync(path.join(`tenants`, tenantHash, `key`, `publicKey.js`), `module.exports = "${req.body.pk}";\n`);
-        fs.rmSync(path.join(`pending-tenants`, tenantHash));
+        fs.writeFileSync(Dirs.TenantPublicKeyFile(tenantHash), `module.exports = "${req.body.pk}";\n`);
+        fs.rmSync(Dirs.PendingTenant(tenantHash));
 
         res.send(`/` + tenant);
     });
@@ -146,7 +161,7 @@ SodiumPlus.auto().then(async sodium => {
     app.get(tenant(`/pk`), validateTenant, withAuthRest, ({ query, session, _hashedTenant }, res) => {
         console.log(query, session.data.captcha);
 
-        const publicKeyRaw = require(`.` + path.sep + path.join(`tenants`, _hashedTenant, `key`, `publicKey`));
+        const publicKeyRaw = require(`.` + path.sep + Dirs.TenantPublicKeyFile(_hashedTenant));
 
         // this field is probably not strictly necessary, but it might make the distinction between admin and visitors more obvious
         // TODO must be unset when logging out. or the session must be destroyed
@@ -174,44 +189,44 @@ SodiumPlus.auto().then(async sodium => {
         const dataHash = (await sodium.crypto_generichash(serialized)).toString(`hex`);
         console.log(dataHash);
 
-        fs.mkdirSync(path.join(`tenants`, _hashedTenant, `messages`, convoId), { recursive: true });
-        fs.writeFileSync(path.join(`tenants`, _hashedTenant, `messages`, convoId, dataHash), serialized);
+        fs.mkdirSync(Dirs.TenantConversation(_hashedTenant, convoId), { recursive: true });
+        fs.writeFileSync(Dirs.TenantMessage(_hashedTenant, convoId, dataHash), serialized);
 
         res.send(serialized);
     });
 
     app.get(tenant(`/convos/:convoId`), validateTenant, withAuthRest, ({ session, params, _hashedTenant }, res) => {
-        const convoDirs = fs.readdirSync(path.join(`tenants`, _hashedTenant, `messages`));
+        const convoDirs = fs.readdirSync(Dirs.TenantConversations(_hashedTenant));
 
         if (session.data.admin) {
-            const convos = convoDirs.map(convoId => ({
-                id: convoId,
-                messages: fs.readdirSync(path.join(`tenants`, _hashedTenant, `messages`, convoId))
-                    .map(file => fs.readFileSync(path.join(`tenants`, _hashedTenant, `messages`, convoId, file), `utf8`)),
-            }));
+            const convos = convoDirs.map(convoId => Conversation(
+                convoId,
+                readFilesSync(Dirs.TenantConversation(_hashedTenant, convoId))
+            ));
             return res.json(convos);
         }
 
         const convoId = params.convoId;
 
         if (!convoDirs.includes(convoId)) {
-            return res.json([{
-                id: convoId,
-                messages: [],
-            }]);
+            return res.json([Conversation(convoId)]);
         }
 
-        const messages = fs.readdirSync(path.join(`tenants`, _hashedTenant, `messages`, convoId))
-            .map(file => fs.readFileSync(path.join(`tenants`, _hashedTenant, `messages`, convoId, file), `utf8`));
+        const messages = readFilesSync(Dirs.TenantConversation(_hashedTenant, convoId));
 
-        const convo = {
-            id: convoId,
-            messages,
-        };
+        const convo = Conversation(convoId, messages);
 
         console.log(convo);
         return res.json([convo]);
     });
+
+    function Conversation(id, messages = []) {
+        return { id, messages };
+    }
+    function readFilesSync(dir) {
+        return fs.readdirSync(dir)
+            .map(file => fs.readFileSync(path.join(dir, file), `utf8`));
+    }
 
 
     // TODO review whether it wouldn't be better to do https redirect via proxy e.g. nginx or apache
