@@ -3,7 +3,7 @@
         <div class="meta">{{convo.id}}</div>
         <div class="reply-controls">
             <!-- TODO autofocus -->
-            <textarea v-model="replyText" cols="50" rows="3" @paste="paste" placeholder="Your message"></textarea>
+            <textarea v-model="replyText" cols="50" rows="3" @paste="paste" placeholder="Write message or paste file"></textarea>
             <button @click="reply" :disabled="replyBlocked">Send</button>
             <div v-if="attachment">
                 <Attachment new-message :attachment="attachment" @remove="removeAttachment"></Attachment>

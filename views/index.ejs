@@ -153,8 +153,8 @@
     <template v-if="state.currentPage === 'login'">
         <h2>Login</h2>
 
-<!--        <form @submit.prevent="login">-->
         <form v-if="state.loginStep === 0" @submit.prevent="toCaptcha">
+            <p>Create a new username / passphrase combination or use an existing one.</p>
             <div>
                 <input type="text" v-model="state.name" placeholder="Your name" required autofocus>  <!-- TODO maybe minlength -->
             </div>
