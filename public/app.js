@@ -163,7 +163,11 @@ export function getApp({ reactive }, sid) {
                 resetInput();
 
                 const [message] = await decryptMessages(state.clientSecret, oppositePublic, [ciphermsg]);
-                state.convos.find(c => c.id === convo.id).entries.splice(0, 0, message);
+                const convoToUpdate = state.admin
+                    ? state.convos.find(c => c.id === convo.id)
+                    : state.selectedConvo;
+
+                convoToUpdate.entries.splice(0, 0, message);
             },
 
             isSelf(name) {
