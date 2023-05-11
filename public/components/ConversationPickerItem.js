@@ -19,6 +19,7 @@ export default {
 
             if (!entry) return ``;
             if (!entry.msg && entry.attachment) return `(Attachment)`;
+            if (!entry.msg && entry.largeMsg) return `(Large message)`;
 
             return entry.msg;
         },

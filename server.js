@@ -197,7 +197,7 @@ SodiumPlus.auto().then(async sodium => {
         res.json(publicKeyRaw);
     });
 
-    app.get(entrypoint(`/convos/latest`), requireSession, validateEntrypoint, withAuthRest, ({ _session, params, _hashedTenant, _hashedEntrypoint }, res) => {
+    app.get(entrypoint(`/convos/latest`), requireSession, validateEntrypoint, withAuthRest, ({ _session, params, _hashedTenant }, res) => {
         if (!_session.admin) return res.status(400).send();
 
         const convosByEntrypoint = DataAccess.allTenantConvos(_hashedTenant);
@@ -208,8 +208,8 @@ SodiumPlus.auto().then(async sodium => {
         )));
 
         const interTenant = _session.instanceOwner
-            ? DataAccess.allInterTenantConvos()
-            : [DataAccess.interTenantConvo(_session.pk)];
+            ? DataAccess.allInterTenantConvos({ sizeThreshold: true })
+            : [DataAccess.interTenantConvo(_session.pk, 0, true)];
 
         interTenant.forEach(convo => {
             const latest = DataAccess.latestMessage(convo.messages);
@@ -228,7 +228,46 @@ SodiumPlus.auto().then(async sodium => {
                 .filter(conId => conId === convoId)
                 .map(conId => Conversation(
                     conId,
-                    DataAccess.convoMessages(_hashedTenant, entrypointHash, conId, after),
+                    DataAccess.convoMessagesWithThreshold(_hashedTenant, entrypointHash, conId, after),
+                    epId
+                ))
+            );
+
+            if (convos.length) {
+                return res.json(convos[0]);
+            }
+
+            const allIinterTenant = _session.instanceOwner
+                ? DataAccess.allInterTenantConvos({ after, sizeThreshold: true })
+                : [DataAccess.interTenantConvo(_session.pk, after, true)];
+            const interTenant = allIinterTenant.find(convo => convo.id === convoId);
+
+            return res.json(interTenant);
+        }
+
+        const convoDirs = DataAccess.tenantEntrypointConvos(_hashedTenant, _hashedEntrypoint);
+
+        if (!convoDirs.includes(convoId)) {
+            return res.json(Conversation(convoId));
+        }
+
+        const messages = DataAccess.convoMessagesWithThreshold(_hashedTenant, _hashedEntrypoint, convoId, after);
+        const convo = Conversation(convoId, messages);
+
+        console.log(convo);
+        return res.json(convo);
+    });
+
+    app.get(entrypoint(`/convos/:convoId/message/:nonce`), requireSession, validateEntrypoint, withAuthRest, ({ _session, params,  _hashedTenant, _hashedEntrypoint }, res) => {
+        const { convoId, nonce } = params;
+
+        if (_session.admin) {
+            const convosByEntrypoint = DataAccess.allTenantConvos(_hashedTenant);
+            const convos = convosByEntrypoint.flatMap(({ entrypointHash, epId, convos }) => convos
+                .filter(conId => conId === convoId)
+                .map(conId => Conversation(
+                    conId,
+                    [DataAccess.convoMessage(_hashedTenant, entrypointHash, conId, nonce)],
                     epId
                 ))
             );
@@ -242,10 +281,9 @@ SodiumPlus.auto().then(async sodium => {
                 : [DataAccess.interTenantConvo(_session.pk)];
             const interTenant = allIinterTenant.find(convo => convo.id === convoId);
 
-            interTenant.messages = interTenant.messages.filter(msg => msg.t > after);
-
             return res.json(interTenant);
         }
+
 
         const convoDirs = DataAccess.tenantEntrypointConvos(_hashedTenant, _hashedEntrypoint);
 
@@ -253,10 +291,9 @@ SodiumPlus.auto().then(async sodium => {
             return res.json(Conversation(convoId));
         }
 
-        const messages = DataAccess.convoMessages(_hashedTenant, _hashedEntrypoint, convoId, after);
-        const convo = Conversation(convoId, messages);
+        const message = DataAccess.convoMessage(_hashedTenant, _hashedEntrypoint, convoId, nonce);
+        const convo = Conversation(convoId, [message]);
 
-        console.log(convo);
         return res.json(convo);
     });
 

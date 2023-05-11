@@ -17,11 +17,16 @@
         </div>
         <!-- TODO sorting. to allow seamless reading flow from old-to-new and new-to-old -->
         <div class="entries">
-            <div class="entry" v-for="({ name, time, msg, attachment }) in entriesLatestFirst">
-                <div class="meta"><strong>{{$root.isSelf(name) ? 'Me' : name}}</strong> at {{toUTCString(time)}}</div>
-                <div class="message" :class="{ self: $root.isSelf(name) }">
-                    <div>{{msg}}</div>
-                    <Attachment v-if="attachment" :attachment="attachment" @download="download(attachment)"></Attachment>
+            <div class="entry" v-for="entry in entriesLatestFirst" key="nonce">
+                <div class="meta"><strong>{{$root.isSelf(entry.name) ? 'Me' : entry.name}}</strong> at {{toUTCString(entry.time)}}</div>
+                <div class="message" :class="{ self: $root.isSelf(entry.name), isLarge: !!entry.largeMsg }">
+                    <template v-if="entry.largeMsg">
+                        <div>(Large message) <button @click="downloadLargeMessage(entry)">Download ({{entry.largeMsg}})</button></div>
+                    </template>
+                    <template v-else>
+                        <div>{{entry.msg}}</div>
+                        <Attachment v-if="entry.attachment" :attachment="entry.attachment" @download="download(entry.attachment)"></Attachment>
+                    </template>
                 </div>
             </div>
         </div>

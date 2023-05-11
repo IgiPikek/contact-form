@@ -24,7 +24,7 @@ const Attachment = {
 
 export default {
     props: [`convo`],
-    emits: [`reply`],
+    emits: [`reply`, `getMessage`],
     template: `#conversation`,
     components: { Attachment },
     data() {
@@ -85,6 +85,9 @@ export default {
             if (!await this.attachFile(target.files[0])) {
                 target.value = null;
             }
+        },
+        downloadLargeMessage(entry) {
+            this.$emit(`getMessage`, this.convo, entry.nonce);
         },
         download(attachment) {
             const a = document.createElement(`a`);

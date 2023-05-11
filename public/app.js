@@ -134,7 +134,19 @@ export function getApp({ reactive }, sid) {
                 }
 
                 const { json: convo } = await getJsonFromTenantWithSession(url, state.authToken);
-                return await decryptConvo(convo);
+                return decryptConvo(convo);
+            },
+
+            async getMessage(convo, msgNonce) {
+                const { json: convoWithMsg } = await getJsonFromTenantWithSession(`convos/${convo.id}/message/${msgNonce}`, state.authToken);
+                const clearConvo = await decryptConvo(convoWithMsg);
+                const largeMsg = clearConvo.entries[0];
+
+                state.selectedConvo.entries.splice(
+                    state.selectedConvo.entries.findIndex(entry => entry.nonce === msgNonce),
+                    1,
+                    largeMsg
+                );
             },
 
             async sendResponse(convo, { text, attachment }, resetInput) {
@@ -171,7 +183,8 @@ export function getApp({ reactive }, sid) {
             },
 
             isSelf(name) {
-                return state.name.toLowerCase() === name.toLowerCase();
+                // `name` can be `undefined` when latest messages is a large message. See message decryption.
+                return name && state.name.toLowerCase() === name.toLowerCase();
             },
 
             async refresh() {
@@ -247,20 +260,32 @@ export function getApp({ reactive }, sid) {
 
     async function decryptMessages(ownSecret, oppositePublic, messages) {
         const decrypted = [];
+        const largeMsgIndicator = `#`;
 
         for (const { k, n, m, t } of messages) {
-            const plainMsg = await sodium.crypto_box_open(
-                await sodium.sodium_hex2bin(m),
-                await sodium.sodium_hex2bin(n),
-                ownSecret,
-                oppositePublic
-            );
+            if (m.startsWith(largeMsgIndicator)) {
+                decrypted.push({
+                    key: k,
+                    nonce: n,
+                    time: t,
+                    largeMsg: toSizeUnitString(parseInt(m.slice(1))),
+                });
+            }
+            else {
+                const plainMsg = await sodium.crypto_box_open(
+                    await sodium.sodium_hex2bin(m),
+                    await sodium.sodium_hex2bin(n),
+                    ownSecret,
+                    oppositePublic
+                );
 
-            decrypted.push({
-                ...JSON.parse(plainMsg.toString(`utf8`)),
-                key: k,
-                time: t,
-            });
+                decrypted.push({
+                    ...JSON.parse(plainMsg.toString(`utf8`)),
+                    key: k,
+                    nonce: n,
+                    time: t,
+                });
+            }
         }
 
         return decrypted;
@@ -356,5 +381,12 @@ export function getApp({ reactive }, sid) {
             .map(async ep => sodium.crypto_box_seal_open(await sodium.sodium_hex2bin(ep), state.clientPublic, state.clientSecret)));
 
         return epsBytes.map(ep => ep.toString(`utf8`)).sort();
+    }
+
+    function toSizeUnitString(bytes) {
+        const kB = Math.ceil(bytes / 1024);
+        return kB > 1024
+            ? (Math.ceil(kB / 1024 * 10) / 10).toLocaleString() + ` MB`
+            : kB.toLocaleString() + ` kB`;
     }
 }

@@ -49,6 +49,10 @@
         .message.self {
             background-color: #ddc;
         }
+        .message.isLarge {
+            font-size: .9em;
+            font-style: italic;
+        }
         section:nth-of-type(2n) {
             background-color: #eee;
         }
@@ -185,7 +189,11 @@
         <div>
             <Conversation-Picker :convos="state.convos" @selection-changed="convoChanged"></Conversation-Picker>
             <main>
-                <Conversation v-if="state.selectedConvo" :convo="state.selectedConvo" @reply="sendResponse"></Conversation>
+                <Conversation v-if="state.selectedConvo"
+                              :convo="state.selectedConvo"
+                              @reply="sendResponse"
+                              @get-message="getMessage"
+                ></Conversation>
             </main>
         </div>
     </template>
@@ -198,7 +206,7 @@
         <!-- threads, email style -->
         <template v-if="state.selectedConvo">
             <hr>
-            <Conversation :convo="state.selectedConvo" @reply="sendResponse"></Conversation>
+            <Conversation :convo="state.selectedConvo" @reply="sendResponse" @get-message="getMessage"></Conversation>
         </template>
     </template>
 

@@ -2,7 +2,9 @@ module.exports = {
     activeTenants,
     allInterTenantConvos,
     allTenantConvos,
+    convoMessage,
     convoMessages,
+    convoMessagesWithThreshold,
     latestConvoMessage,
     latestMessage,
     createEntrypoint,
@@ -24,6 +26,9 @@ const path = require(`path`);
 
 const { SodiumPlus } = require(`sodium-plus`);
 
+
+const messageSizeThreshold = 5000;
+const largeMsgIndicator = `#`;
 
 const dataDir = path.join(__dirname, `data`);
 const Dirs = {
@@ -60,9 +65,9 @@ function activeTenants() {
     return tenants.filter(t => !pending.includes(t));
 }
 
-function allInterTenantConvos() {
+function allInterTenantConvos({ after, sizeThreshold } = {}) {
     return fs.readdirSync(Dirs.InterTenantConvos)
-        .map(interTenantConvo);
+        .map(convoId => interTenantConvo(convoId, after, sizeThreshold));
 }
 
 function allTenantConvos(tenantHash) {
@@ -74,15 +79,29 @@ function allTenantConvos(tenantHash) {
         }));
 }
 
+function convoMessage(tenantHash, entrypointHash, convoId, messageNonce) {
+    const filename = fs.readdirSync(Dirs.TenantEntrypointConversation(tenantHash, entrypointHash, convoId))
+        .find(file => JSON.parse(fs.readFileSync(Dirs.TenantEntrypointMessage(tenantHash, entrypointHash, convoId, file), `utf8`)).n === messageNonce);
+
+    return JSON.parse(fs.readFileSync(Dirs.TenantEntrypointMessage(tenantHash, entrypointHash, convoId, filename), `utf8`));
+}
+
 function convoMessages(tenantHash, entrypointHash, convoId, after = 0) {
     return fs.readdirSync(Dirs.TenantEntrypointConversation(tenantHash, entrypointHash, convoId))
         .map(file => JSON.parse(fs.readFileSync(Dirs.TenantEntrypointMessage(tenantHash, entrypointHash, convoId, file), `utf8`)))
         .filter(msg => msg.t > after);
 }
 
+function convoMessagesWithThreshold(tenantHash, entrypointHash, convoId, after = 0) {
+    return fs.readdirSync(Dirs.TenantEntrypointConversation(tenantHash, entrypointHash, convoId))
+        .map(file => JSON.parse(fs.readFileSync(Dirs.TenantEntrypointMessage(tenantHash, entrypointHash, convoId, file), `utf8`)))
+        .filter(msg => msg.t > after)
+        .map(applySizeThreshold);
+}
+
 function latestConvoMessage(tenantHash, entrypointHash, convoId) {
     const messages = convoMessages(tenantHash, entrypointHash, convoId);
-    return latestMessage(messages);
+    return applySizeThreshold(latestMessage(messages));
 }
 
 function latestMessage(messages) {
@@ -111,7 +130,7 @@ function instanceOwnerPk() {
     return require(Dirs.InstanceOwnerKeyFile);
 }
 
-function interTenantConvo(convoId) {
+function interTenantConvo(convoId, after = 0, sizeThreshold = false) {
     const convoDir = fs.readdirSync(Dirs.InterTenantConvo(convoId));
     const idFileFull = Dirs.InterTenantIdFile(convoId);
     const idFile = path.basename(idFileFull);
@@ -124,7 +143,9 @@ function interTenantConvo(convoId) {
         io: instanceOwnerPk(),  // instance owner
         ti: encTenantId,  // tenant ID, only required by instance owner
         messages: msgFiles
-            .map(file => JSON.parse(fs.readFileSync(Dirs.InterTenantMessage(convoId, file), `utf8`))),
+            .map(file => JSON.parse(fs.readFileSync(Dirs.InterTenantMessage(convoId, file), `utf8`)))
+            .filter(msg => msg.t > after)
+            .map(sizeThreshold ? applySizeThreshold : id),
     };
 }
 
@@ -174,6 +195,9 @@ function tenantPk(tenantHash) {
 }
 
 
+// ---- private ----
+
+
 async function serializeEncryptedMsg(encryptedMsg) {
     const sodium = await SodiumPlus.auto();
     const data = {
@@ -186,4 +210,15 @@ async function serializeEncryptedMsg(encryptedMsg) {
     const dataHash = (await sodium.crypto_generichash(serialized)).toString(`hex`);
 
     return { convoId, serialized, dataHash };
+}
+
+function applySizeThreshold(msg) {
+    if (msg.m.length > messageSizeThreshold) {
+        msg.m = largeMsgIndicator + msg.m.length;
+    }
+    return msg;
+}
+
+function id(x) {
+    return x;
 }
