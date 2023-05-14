@@ -18,8 +18,8 @@
         <!-- TODO sorting. to allow seamless reading flow from old-to-new and new-to-old -->
         <div class="entries">
             <div class="entry" v-for="entry in entriesLatestFirst" key="nonce">
-                <div class="meta"><strong>{{$root.isSelf(entry.name) ? 'Me' : entry.name}}</strong> at {{toUTCString(entry.time)}}</div>
-                <div class="message" :class="{ self: $root.isSelf(entry.name), isLarge: !!entry.largeMsg }">
+                <div class="meta"><strong>{{$root.isSelf(entry) ? 'Me' : sender(entry)}}</strong> at {{toUTCString(entry.time)}}</div>
+                <div class="message" :class="{ self: $root.isSelf(entry), isLarge: !!entry.largeMsg }">
                     <template v-if="entry.largeMsg">
                         <div>(Large message) <button @click="downloadLargeMessage(entry)">Download ({{entry.largeMsg}})</button></div>
                     </template>

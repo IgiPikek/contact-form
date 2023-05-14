@@ -8,7 +8,7 @@ export default {
             return `#` + key.slice(0, 6);
         },
         convoPartner() {
-            const partnerEntry = this.convo.entries.find(e => !this.$root.isSelf(e.name));
+            const partnerEntry = this.convo.entries.find(e => !this.$root.isSelf(e));
             return partnerEntry?.name;
         },
         lastEntry() {

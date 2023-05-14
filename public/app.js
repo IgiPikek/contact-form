@@ -167,6 +167,7 @@ export function getApp({ reactive }, sid) {
                         conversationKey,
                         ownSecret: state.clientSecret,
                         oppositePublic,
+                        from: Sender(state.clientPublic, state.name),
                     }),
                 });
 
@@ -182,9 +183,11 @@ export function getApp({ reactive }, sid) {
                 convoToUpdate.entries.splice(0, 0, message);
             },
 
-            isSelf(name) {
-                // `name` can be `undefined` when latest messages is a large message. See message decryption.
-                return name && state.name.toLowerCase() === name.toLowerCase();
+            isSelf(convoEntry) {
+                // Check on `name` is for backward compatibility.
+                return convoEntry.from
+                    ? convoEntry.from.key === state.clientPublic.toString(`hex`)
+                    : convoEntry.name && state.name.toLowerCase() === convoEntry.name.toLowerCase();
             },
 
             async refresh() {
@@ -262,11 +265,21 @@ export function getApp({ reactive }, sid) {
         const decrypted = [];
         const largeMsgIndicator = `#`;
 
-        for (const { k, n, m, t } of messages) {
+        for (const { k, n, m, f, t } of messages) {
+            const from = f
+                ? JSON.parse((await sodium.crypto_box_open(
+                    await sodium.sodium_hex2bin(f),
+                    await sodium.sodium_hex2bin(n),
+                    ownSecret,
+                    oppositePublic
+                )).toString(`utf8`))
+                : undefined;
+
             if (m.startsWith(largeMsgIndicator)) {
                 decrypted.push({
                     key: k,
                     nonce: n,
+                    from,
                     time: t,
                     largeMsg: toSizeUnitString(parseInt(m.slice(1))),
                 });
@@ -283,6 +296,7 @@ export function getApp({ reactive }, sid) {
                     ...JSON.parse(plainMsg.toString(`utf8`)),
                     key: k,
                     nonce: n,
+                    from,
                     time: t,
                 });
             }
@@ -295,14 +309,20 @@ export function getApp({ reactive }, sid) {
         return new TextEncoder().encode(JSON.stringify({ name, msg, attachment }));
     }
 
-    async function createPayload({ plaintext, conversationKey, ownSecret, oppositePublic }) {
+    function Sender(publicKey, name) {
+        return new TextEncoder().encode(JSON.stringify({ key: publicKey.toString(`hex`), name }));
+    }
+
+    async function createPayload({ plaintext, conversationKey, ownSecret, oppositePublic, from }) {
         const nonce = await sodium.randombytes_buf(sodium.CRYPTO_BOX_NONCEBYTES);
         const ciphertext = await sodium.crypto_box(plaintext, nonce, ownSecret, oppositePublic);
+        const cipherFrom = await sodium.crypto_box(from, nonce, ownSecret, oppositePublic);
 
         return {
             k: conversationKey.toString(`hex`),
             n: nonce.toString(`hex`),
             m: ciphertext.toString(`hex`),
+            f: cipherFrom.toString(`hex`),
         };
     }
 

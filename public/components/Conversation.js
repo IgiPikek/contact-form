@@ -97,6 +97,8 @@ export default {
             URL.revokeObjectURL(a.href);
         },
 
+        // Use only `from` once backward compatibility through `entry.name` becomes unnecessary.
+        sender: entry => entry.name || entry.from?.name,
         toUTCString: time => new Date(time).toUTCString(),
     },
     computed: {
