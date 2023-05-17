@@ -30,7 +30,7 @@ const { SodiumPlus } = require(`sodium-plus`);
 const messageSizeThreshold = 5000;
 const largeMsgIndicator = `#`;
 
-const dataDir = path.join(__dirname, `data`);
+const dataDir = path.join(__dirname, `..`, `data`);
 const Dirs = {
     Tenants: path.join(dataDir, `tenants`),
     Tenant: tenantHash => path.join(Dirs.Tenants, tenantHash),
