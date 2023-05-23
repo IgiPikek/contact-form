@@ -1,6 +1,6 @@
 <template id="conversation">
     <section>
-        <div class="meta">{{convo.id}}</div>
+        <div v-if="$root.state.admin || <%= !prod %>" class="meta">{{convo.id}}</div>
         <div class="reply-controls">
             <!-- TODO autofocus -->
             <textarea v-model="replyText" cols="50" rows="3" @paste="paste" placeholder="Write message or paste file"></textarea>
