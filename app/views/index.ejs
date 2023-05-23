@@ -150,8 +150,10 @@
 </head>
 
 <body>
+<% if (!embedded) { %>
 <h1>Contact form</h1>
 <div>For: <%= tenant %></div>
+<% } %>
 
 <div id="app">
     <template v-if="state.currentPage === 'login'">

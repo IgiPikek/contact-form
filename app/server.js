@@ -144,9 +144,11 @@ SodiumPlus.auto().then(async sodium => {
     app.get(entrypoint(`/`), validateEntrypoint, (req, res) => {
         console.log(`:tenantId/:entrypoint`, req._hashedTenant, req._hashedEntrypoint);
 
+        const embedded = req.query.embedded === `true`;
+
         const session = Session.newSession();
 
-        res.render(`index`, { tenant: req.params.tenantId, sid: session.id, prod: env.prod });
+        res.render(`index`, { tenant: req.params.tenantId, sid: session.id, prod: env.prod, embedded });
     });
 
     app.get(entrypoint(`/captcha`), requireSession, validateEntrypoint, (req, res) => {
