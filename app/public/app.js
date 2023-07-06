@@ -16,6 +16,7 @@ export function getApp({ reactive }, sid) {
         pwType: `password`,
         pwBtnText: `Show`,
         captcha: ``,
+        loggingIn: false,
 
         convos: [],
         selectedConvo: undefined,
@@ -31,6 +32,7 @@ export function getApp({ reactive }, sid) {
         instanceOwner: false,
 
         entrypoints: [],
+        newEp: ``,
 
         waitingCreateEntrypoint: false,
         newEntrypointValid: false,
@@ -85,6 +87,8 @@ export function getApp({ reactive }, sid) {
             },
 
             async login() {
+                state.loggingIn = true;
+
                 const { clientPublic, clientSecret } = await userKeys(sodium, state.name, state.pw, state.tenantId, state.entrypoint);
 
                 const pkHash = (await sodium.crypto_generichash(clientPublic.getBuffer())).toString(`hex`);
@@ -97,6 +101,7 @@ export function getApp({ reactive }, sid) {
                         state.captcha = ``;
                         // Trigger reloading the captcha.
                         this.$refs.imgCaptcha.src = this.$refs.imgCaptcha.src;
+                        state.loggingIn = false;
                     });
 
                 if (!cryptoToken) return;
@@ -137,8 +142,9 @@ export function getApp({ reactive }, sid) {
                 return decryptConvo(convo);
             },
 
-            async getMessage(convo, msgNonce) {
-                const { json: convoWithMsg } = await getJsonFromTenantWithSession(`convos/${convo.id}/message/${msgNonce}`, state.authToken);
+            async getMessage(convo, msgNonce, reset) {
+                const { json: convoWithMsg } = await getJsonFromTenantWithSession(`convos/${convo.id}/message/${msgNonce}`, state.authToken)
+                    .finally(reset);
                 const clearConvo = await decryptConvo(convoWithMsg);
                 const largeMsg = clearConvo.entries[0];
 
@@ -149,7 +155,7 @@ export function getApp({ reactive }, sid) {
                 );
             },
 
-            async sendResponse(convo, { text, attachment }, resetInput) {
+            async sendResponse(convo, { text, attachment }, { resetInput, unblockInput }) {
                 // TODO validate input
                 console.log(text, convo);
 
@@ -171,16 +177,24 @@ export function getApp({ reactive }, sid) {
                     }),
                 });
 
-                const ciphermsg = await submitResponse(tenantId, entrypoint, payload, state.authToken).then(res => res.json());
-                console.log(ciphermsg);
-                resetInput();
+                const response = await submitResponse(tenantId, entrypoint, payload, state.authToken);
 
-                const [message] = await decryptMessages(state.clientSecret, oppositePublic, [ciphermsg]);
-                const convoToUpdate = state.admin
-                    ? state.convos.find(c => c.id === convo.id)
-                    : state.selectedConvo;
+                if (response.ok) {
+                    const ciphermsg = await response.json();
 
-                convoToUpdate.entries.splice(0, 0, message);
+                    console.log(ciphermsg);
+                    resetInput();
+
+                    const [message] = await decryptMessages(state.clientSecret, oppositePublic, [ciphermsg]);
+                    const convoToUpdate = state.admin
+                        ? state.convos.find(c => c.id === convo.id)
+                        : state.selectedConvo;
+
+                    convoToUpdate.entries.splice(0, 0, message);
+                } else {
+                    alert(response.statusText);
+                    unblockInput();
+                }
             },
 
             isSelf(convoEntry) {

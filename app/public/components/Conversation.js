@@ -2,6 +2,7 @@ const Attachment = {
     props: {
         attachment: Object,  // Can be File or SerializedAttachment
         newMessage: Boolean,
+        sending: Boolean,
     },
     emits: [`remove`, `download`],
     template: `#attachment`,
@@ -34,19 +35,29 @@ export default {
             imageBlobUrl: undefined,
 
             serializing: false,
+            sending: false,
+            downloadingLargeMsg: false,
         };
     },
     methods: {
         reply() {
+            this.block();
             this.$emit(`reply`,
                 this.convo,
                 { text: this.replyText, attachment: this.attachment },
-                () => this.clear()
+                { resetInput: () => this.clear(), unblockInput: () => this.unblock() }
             );
         },
         clear() {
             this.replyText = ``;
             this.removeAttachment();
+            this.unblock();
+        },
+        block() {
+            this.sending = true;
+        },
+        unblock() {
+            this.sending = false;
         },
         async paste(e) {
             const clipboardItems = Array.from(e.clipboardData.items);
@@ -87,7 +98,8 @@ export default {
             }
         },
         downloadLargeMessage(entry) {
-            this.$emit(`getMessage`, this.convo, entry.nonce);
+            this.downloadingLargeMsg = true;
+            this.$emit(`getMessage`, this.convo, entry.nonce, () => this.downloadingLargeMsg = false);
         },
         download(attachment) {
             const a = document.createElement(`a`);
@@ -106,7 +118,7 @@ export default {
             return this.convo.entries.slice(0).sort((a, b) => b.time - a.time);
         },
         replyBlocked() {
-            return this.replyText.length === 0 && !this.attachment;
+            return this.sending || this.replyText.length === 0 && !this.attachment;
         },
     },
 };

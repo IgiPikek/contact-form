@@ -64,7 +64,7 @@
         <label>
             <span>Name the <strong>entrypoint</strong> through which you want to reach your contact form.<br>
                 <em>You should use this entrypoint exclusively for yourself.</em> You can create more entrypoints for sharing with visitors later.</span>
-            <input type="text" name="entrypoint" placeholder="Entrypoint" pattern="[a-z\d_-]+" required>
+            <input type="text" name="entrypoint" placeholder="Entrypoint" pattern="[a-z\d_\-]+" required>
         </label>
         <table>
             <tr>
@@ -146,8 +146,8 @@
 
     const previewOutput = document.querySelector(`.entrypoint-preview`);
     const previewTemplate = previewOutput.innerText;
-    const pattern = /[a-z\d_-]/i;
-    const patternInverted = /[^a-z\d_-]/i;
+    const pattern = /[a-z\d_\-]/i;
+    const patternInverted = /[^a-z\d_\-]/i;
 
 
     document.querySelector(`input[name=name]`).addEventListener(`change`, e => {

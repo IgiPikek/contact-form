@@ -27,6 +27,12 @@
             box-sizing: border-box;
             max-width: 100%;
         }
+        .reply-controls .sending-indicator {
+            margin-left: .5em;
+            font-size: .8em;
+            font-style: italic;
+            color: #333;
+        }
         img.attachment {
             max-width: 400px;
             max-height: 200px;
@@ -184,9 +190,10 @@
             <div class="row">
                 <img :src="'/' + state.tenantId + '/' + state.entrypoint + '/captcha?sid=' + sid" alt="Captcha" width="150" height="50" ref="imgCaptcha">
                 <span> = </span>
-                <input type="text" v-model="state.captcha" ref="inpCaptcha" placeholder="Result" required>
+                <input type="text" v-model="state.captcha" :readonly="state.loggingIn" ref="inpCaptcha" placeholder="Result" required>
             </div>
-            <button type="submit">Log in</button>
+            <div v-if="state.loggingIn">Logging in...</div>
+            <button v-else type="submit">Log in</button>
         </form>
 
     </template>
@@ -209,13 +216,12 @@
     </template>
 
     <template v-if="state.currentPage === 'messages' && !state.admin">
-        <h2>Messages</h2>
-        <p>Hello {{state.name}}</p>
-        <button @click="refresh">Refresh</button>
+        <h2 v-if="<%= !embedded %>">Messages</h2>
+        <p>Hello {{state.name}}.</p>
+        <p><button @click="refresh">Refresh messages</button></p>
 
         <!-- threads, email style -->
         <template v-if="state.selectedConvo">
-            <hr>
             <Conversation :convo="state.selectedConvo" @reply="sendResponse" @get-message="getMessage"></Conversation>
         </template>
     </template>
@@ -232,12 +238,12 @@
             </tr>
             <tr>
                 <td><input type="text" placeholder="New entry point"
-                           pattern="[a-z\d_-]+" required
-                           v-model.trim="newEp"
+                           pattern="[a-z\d_\-]+" required
+                           v-model.trim="state.newEp"
                            @input="validateNewEntrypoint"
                            :disabled="state.waitingCreateEntrypoint"
                     ></td>
-                <td><button @click="createEntrypoint(newEp)" :disabled="!state.newEntrypointValid || state.waitingCreateEntrypoint">Create</button></td>
+                <td><button @click="createEntrypoint(state.newEp)" :disabled="!state.newEntrypointValid || state.waitingCreateEntrypoint">Create</button></td>
             </tr>
         </table>
     </template>
