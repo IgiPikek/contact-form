@@ -207,10 +207,14 @@ export function getApp({ reactive }, sid) {
             async refresh() {
                 if (!state.selectedConvo) return;
 
-                const latestMsg = state.selectedConvo.entries.reduce((latest, entry) => latest.time > entry.time ? latest : entry, { time: -1 });
+                const latestMsg = state.selectedConvo.entries
+                    // Need to find the last message from the opposite party because there can be incoming messages between last refresh and last outgoing message.
+                    .filter(entry => !this.isSelf(entry))
+                    .reduce((latest, entry) => latest.time > entry.time ? latest : entry, { time: -1 });
                 const convoWithNewMessages = await this.getConvo(state.selectedConvo.id, latestMsg.time);
+                const deduplicated = convoWithNewMessages.entries.filter(newEntry => !state.selectedConvo.entries.some(existing => existing.nonce === newEntry.nonce));
 
-                state.selectedConvo.entries.push(...convoWithNewMessages.entries);
+                state.selectedConvo.entries.push(...deduplicated);
             },
 
             async convoChanged(convo) {
