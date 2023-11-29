@@ -10,6 +10,8 @@
     <style>
         body {
             font-family: sans-serif;
+            display: flex;
+            justify-content: center;
         }
         h1 {
             font-size: 1.5rem;
@@ -33,23 +35,29 @@
         .entrypoint-preview {
             font-style: italic;
         }
+        .err {
+            color: red;
+            font-style: italic;
+            font-size: .9rem;
+        }
     </style>
 </head>
 
 <body>
+<main>
 
 <h1>Setup new tenant '<%= tenant %>'</h1>
 
 <form method="post">
     <section>
         <label>
-            <span>This <strong>name</strong> will be displayed to your visitors. (No surrounding white space)</span>
+            <span>This <strong>name</strong> is displayed to your <em>visitors</em>, and you use it to <em>log in</em>. (No surrounding white space.)</span>
             <input type="text" name="name" placeholder="Your name" required autofocus>
         </label>
     </section>
     <section class="passphrase pw1">
         <label>
-            <span>Your <strong>passphrase</strong> (longer is better)</span>
+            <span>Your <strong>passphrase</strong> for login (longer is better)</span>
             <input type="password" name="pw1" placeholder="Passphrase" required>
             <button type="button">Show</button>
         </label>
@@ -59,13 +67,16 @@
             <span>Repeat your <strong>passphrase</strong>.</span>
             <input type="password" name="pw2" placeholder="Passphrase (repeat)" required>
         </label>
+        <span class="err err-pw" hidden>Passwords do not match.</span>
     </section>
     <section>
         <label>
-            <span>Name the <strong>entrypoint</strong> through which you want to reach your contact form.<br>
+            <span>The <strong>entrypoint</strong> through which you want to reach your contact form. This is the second part of the URL.<br>
                 <em>You should use this entrypoint exclusively for yourself.</em> You can create more entrypoints for sharing with visitors later.</span>
+                <span>It must be different from your name. (To reduce the risk of being easily guessed.)</span>
             <input type="text" name="entrypoint" placeholder="Entrypoint" pattern="[a-z\d_\-]+" required>
         </label>
+        <span class="err err-ep" hidden>Entry point must differ from name.</span>
         <table>
             <tr>
                 <td>Your URL:</td>
@@ -192,13 +203,19 @@
     });
 
     function checkCustomValidity() {
-        const valid = form.checkValidity()
-            && (form.pw2.disabled || form.pw1.value === form.pw2.value);
+        const validGeneral = form.checkValidity();
+        const validPw = form.pw2.disabled || form.pw1.value === form.pw2.value;
+        const validEp = form.name.value !== form.entrypoint.value;
 
+        document.querySelector(`.err-pw`).hidden = validPw;
+        document.querySelector(`.err-ep`).hidden = validEp;
+
+        const valid = validGeneral && validPw && validEp;
         btnSubmit.disabled = !valid;
         return valid;
     }
 </script>
 
+</main>
 </body>
 </html>
