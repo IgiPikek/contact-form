@@ -58,7 +58,7 @@ export function getApp({ reactive }, sid) {
                 this.state.currentPage = page;
 
                 if (page === `messages` && state.admin) {
-                    state.convos = (await this.getLatestMessages()).map(convo => ({ ...convo, stub: true }));
+                    this.refreshList();
                 }
                 else if (page === `messages` && !state.admin) {
                     state.selectedConvo = await this.getConvo(state.clientPublic.toString(`hex`));
@@ -215,6 +215,10 @@ export function getApp({ reactive }, sid) {
                 const deduplicated = convoWithNewMessages.entries.filter(newEntry => !state.selectedConvo.entries.some(existing => existing.nonce === newEntry.nonce));
 
                 state.selectedConvo.entries.push(...deduplicated);
+            },
+
+            async refreshList() {
+                state.convos = (await this.getLatestMessages()).map(convo => ({ ...convo, stub: true }));
             },
 
             async convoChanged(convo) {
