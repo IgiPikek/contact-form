@@ -37,6 +37,7 @@ export default {
             serializing: false,
             sending: false,
             downloadingLargeMsg: false,
+            timestampFormatUTC: true,
         };
     },
     methods: {
@@ -112,6 +113,7 @@ export default {
         // Use only `from` once backward compatibility through `entry.name` becomes unnecessary.
         sender: entry => entry.name || entry.from?.name,
         toUTCString: time => new Date(time).toUTCString(),
+        toLocalTime: time => new Date(time).toLocaleString(),
     },
     computed: {
         entriesLatestFirst() {

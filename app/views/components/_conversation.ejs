@@ -21,7 +21,12 @@
         <!-- TODO sorting. to allow seamless reading flow from old-to-new and new-to-old -->
         <div class="entries">
             <div class="entry" v-for="entry in entriesLatestFirst" :key="entry.nonce">
-                <div class="meta"><strong>{{$root.isSelf(entry) ? 'Me' : sender(entry)}}</strong> at {{toUTCString(entry.time)}}</div>
+                <div class="meta"><strong>{{$root.isSelf(entry) ? 'Me' : sender(entry)}}</strong> at
+                    <span class="msg-timestamp" @click="timestampFormatUTC = !timestampFormatUTC">
+                        <template v-if="timestampFormatUTC">{{toUTCString(entry.time)}}</template>
+                        <template v-else>{{toLocalTime(entry.time)}}</template>
+                    </span>
+                </div>
                 <div class="message" :class="{ self: $root.isSelf(entry), isLarge: !!entry.largeMsg }">
                     <template v-if="entry.largeMsg">
                         <div>(Large message)
