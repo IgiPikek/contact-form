@@ -3,19 +3,19 @@
         <div v-if="$root.state.admin || <%= !prod %>" class="meta">{{convo.id}}</div>
         <div class="reply-controls">
             <!-- TODO autofocus -->
-            <textarea v-model="replyText" :disabled="sending" cols="50" rows="3" @paste="paste" placeholder="Write message or paste file"></textarea>
+            <textarea v-model="replyText" :disabled="sending" cols="50" rows="3" @paste="paste" :placeholder="$root.texts.inputMessage"></textarea>
             <div v-if="attachment">
                 <Attachment new-message :attachment="attachment" :sending="sending" @remove="removeAttachment"></Attachment>
             </div>
             <div v-else-if="serializing">
-                <span class="attachment-description">Attaching...</span>
+                <span class="attachment-description">{{$root.texts.infoAttaching}}...</span>
             </div>
             <div v-else>
-                <label><span class="attachment-description">Attachment</span> <input type="file" @change="fileInputChange" :disabled="sending"></label>
+                <label><span class="attachment-description">{{$root.texts.labelAttachment}}</span> <input type="file" @change="fileInputChange" :disabled="sending"></label>
             </div>
             <div>
-                <button @click="reply" :disabled="replyBlocked">Send</button>
-                <span v-if="sending" class="sending-indicator">Sending...</span>
+                <button @click="reply" :disabled="replyBlocked">{{$root.texts.btnSend}}</button>
+                <span v-if="sending" class="sending-indicator">{{$root.texts.infoSending}}...</span>
             </div>
         </div>
         <!-- TODO sorting. to allow seamless reading flow from old-to-new and new-to-old -->
@@ -29,9 +29,9 @@
                 </div>
                 <div class="message" :class="{ self: $root.isSelf(entry), isLarge: !!entry.largeMsg }">
                     <template v-if="entry.largeMsg">
-                        <div>(Large message)
-                            <span v-if="downloadingLargeMsg">Downloading...</span>
-                            <button v-else @click="downloadLargeMessage(entry)">Download ({{entry.largeMsg}})</button>
+                        <div>({{$root.texts.labelLargeMessage}})
+                            <span v-if="downloadingLargeMsg">{{$root.texts.infoDownloading}}...</span>
+                            <button v-else @click="downloadLargeMessage(entry)">{{$root.texts.btnDownload}} ({{entry.largeMsg}})</button>
                         </div>
                     </template>
                     <template v-else>
@@ -57,6 +57,6 @@
         </span>
 
         <button v-if="newMessage" @click="$emit(`remove`)" :disabled="sending">X</button>
-        <button v-else            @click="$emit(`download`)" :disabled="sending">Download</button>
+        <button v-else            @click="$emit(`download`)" :disabled="sending">{{$root.texts.btnDownload}}</button>
     </div>
 </template>

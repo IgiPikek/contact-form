@@ -10,9 +10,9 @@
         <div class="convo-preview">
             <div class="convo-partner">{{convoPartner}}</div>
 
-            <div v-if="instanceOwner" class="convo-intertenant"><span class="convo-intertenant-tag">Instance owner</span></div>
-            <div v-else-if="subTenant" class="convo-intertenant"><span class="convo-intertenant-tag">Tenant: <strong>{{convo.fromTenant}}</strong></span></div>
-            <div v-else class="convo-entrypoint"><span class="convo-entrypoint-tag">Via: <strong>/{{convo.entrypoint}}</strong></span></div>
+            <div v-if="instanceOwner" class="convo-intertenant"><span class="convo-intertenant-tag">{{$root.texts.pickerInstanceOwner}}</span></div>
+            <div v-else-if="subTenant" class="convo-intertenant"><span class="convo-intertenant-tag">{{$root.texts.pickerTenant}}: <strong>{{convo.fromTenant}}</strong></span></div>
+            <div v-else class="convo-entrypoint"><span class="convo-entrypoint-tag">{{$root.texts.pickerVia}}: <strong>/{{convo.entrypoint}}</strong></span></div>
 
             <div class="last-message">{{lastMessage}}</div>
         </div>

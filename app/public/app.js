@@ -3,9 +3,11 @@ import ConversationPicker from "/components/ConversationPicker.js";
 
 import { userKeys } from "/utils.js";
 
-export function getApp({ reactive }, sid) {
+export async function getApp({ reactive }, sid) {
     const [tenantId, entrypoint] = window.location.pathname.slice(1).split(`/`);
     const getJsonFromTenantWithSession = getJson(tenantId, entrypoint, sid);
+
+    const texts = (await getLocalisedTexts((new URLSearchParams(location.search)).get(`lang`))).default;
 
     const state = reactive({
         currentPage: `login`,
@@ -14,7 +16,7 @@ export function getApp({ reactive }, sid) {
         name: ``,
         pw: ``,
         pwType: `password`,
-        pwBtnText: `Show`,
+        pwBtnText: texts.btnPwShow,
         captcha: ``,
         loggingIn: false,
 
@@ -49,6 +51,7 @@ export function getApp({ reactive }, sid) {
             return {
                 sid,
                 state,
+                texts,
             };
         },
 
@@ -72,10 +75,10 @@ export function getApp({ reactive }, sid) {
             togglePw() {
                 if (state.pwType === `text`) {
                     state.pwType = `password`;
-                    state.pwBtnText = `Show`;
+                    state.pwBtnText = texts.btnPwShow;
                 } else {
                     state.pwType = `text`;
-                    state.pwBtnText = `Hide`;
+                    state.pwBtnText = texts.btnPwHide;
                 }
             },
 
@@ -246,7 +249,7 @@ export function getApp({ reactive }, sid) {
             },
 
             async deleteEntrypoint(event, entrypoint) {
-                if (!confirm(`This will DELETE the entrypoint '${entrypoint}' with all its conversations. This CANNOT be undone. Continue deleting?`)) return;
+                if (!confirm(texts.infoDelete(entrypoint))) return;
 
                 try {
                     event.target.disabled = true;
@@ -430,5 +433,11 @@ export function getApp({ reactive }, sid) {
         return kB > 1024
             ? (Math.ceil(kB / 1024 * 10) / 10).toLocaleString() + ` MB`
             : kB.toLocaleString() + ` kB`;
+    }
+
+    function getLocalisedTexts(lang) {
+        return lang === `ja`
+            ? import(`/lang/ja.js`)
+            : import(`/lang/en.js`);
     }
 }

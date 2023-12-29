@@ -18,8 +18,8 @@ export default {
             const entry = this.lastEntry;
 
             if (!entry) return ``;
-            if (!entry.msg && entry.attachment) return `(Attachment)`;
-            if (!entry.msg && entry.largeMsg) return `(Large message)`;
+            if (!entry.msg && entry.attachment) return `(${this.$root.texts.labelAttachment})`;
+            if (!entry.msg && entry.largeMsg) return `(${this.$root.texts.labelLargeMessage})`;
 
             return entry.msg;
         },

@@ -192,46 +192,46 @@
 
 <div id="app">
     <template v-if="state.currentPage === 'login'">
-        <h2>Login</h2>
+        <h2>{{texts.titleLogin}}</h2>
 
         <form v-if="state.loginStep === 0" @submit.prevent="toCaptcha">
-            <p>Create a new username / passphrase combination or use an existing one.</p>
+            <p>{{texts.infoUserNamePW}}</p>
             <div>
-                <input type="text" v-model="state.name" placeholder="Your name" required autofocus>  <!-- TODO maybe minlength -->
+                <input type="text" v-model="state.name" :placeholder="texts.inputUsername" required autofocus>  <!-- TODO maybe minlength -->
             </div>
             <div class="row">
-                <input :type="state.pwType" v-model="state.pw" placeholder="Passphrase" required>  <!-- TODO minlength -->
+                <input :type="state.pwType" v-model="state.pw" :placeholder="texts.inputPassphrase" required>  <!-- TODO minlength -->
                 <button type="button" @click="togglePw">{{state.pwBtnText}}</button>
             </div>
-            <button type="submit">Next</button>
+            <button type="submit">{{texts.btnNext}}</button>
         </form>
 
         <form v-if="state.loginStep === 1" @submit.prevent="login">
-            <div>Calculate:</div>
+            <div>{{texts.infoCalculate}}:</div>
             <div class="row">
                 <img :src="'/' + state.tenantId + '/' + state.entrypoint + '/captcha?sid=' + sid" alt="Captcha" width="150" height="50" ref="imgCaptcha">
                 <span> = </span>
-                <input type="text" v-model="state.captcha" :readonly="state.loggingIn" ref="inpCaptcha" placeholder="Result" required>
+                <input type="text" v-model="state.captcha" :readonly="state.loggingIn" ref="inpCaptcha" :placeholder="texts.inputResult" required>
             </div>
-            <div v-if="state.loggingIn">Logging in...</div>
-            <button v-else type="submit">Log in</button>
+            <div v-if="state.loggingIn">{{texts.infoLoggingIn}}...</div>
+            <button v-else type="submit">{{texts.btnLogIn}}</button>
         </form>
 
     </template>
 
     <template v-if="state.currentPage === 'messages' && state.admin">
-        <h2>ADMIN PAGE</h2>
+        <h2>{{texts.titleAdminPage}}</h2>
         <div class="convo-container">
             <div>
                 <div class="convo-controls">
-                    <button @click="refreshList">Refresh list</button>
-                    <button @click="goToPage('settings')">Settings</button>
+                    <button @click="refreshList">{{texts.btnRefreshList}}</button>
+                    <button @click="goToPage('settings')">{{texts.btnSettings}}</button>
                 </div>
                 <Conversation-Picker :convos="state.convos" @selection-changed="convoChanged"></Conversation-Picker>
             </div>
             <main v-if="state.selectedConvo">
                 <div class="convo-controls">
-                    <button @click="refresh">Refresh conversation</button>
+                    <button @click="refresh">{{texts.btnRefreshConvo}}</button>
                 </div>
                 <Conversation :convo="state.selectedConvo"
                               @reply="sendResponse"
@@ -242,9 +242,9 @@
     </template>
 
     <template v-if="state.currentPage === 'messages' && !state.admin">
-        <h2 v-if="<%= !embedded %>">Messages</h2>
-        <p>Hello {{state.name}}.</p>
-        <p><button @click="refresh">Refresh conversation</button></p>
+        <h2 v-if="<%= !embedded %>">{{texts.titleVisitorPage}}</h2>
+        <p>{{texts.hello}} {{state.name}}.</p>
+        <p><button @click="refresh">{{texts.btnRefreshConvo}}</button></p>
 
         <!-- threads, email style -->
         <template v-if="state.selectedConvo">
@@ -253,23 +253,23 @@
     </template>
 
     <template v-if="state.currentPage === 'settings' && state.admin">
-        <h2>Settings</h2>
-        <button @click="goToPage('messages')">Back</button>
+        <h2>{{texts.titleSettingsPage}}</h2>
+        <button @click="goToPage('messages')">{{texts.btnBack}}</button>
 
-        <h3>Entry points</h3>
+        <h3>{{texts.labelEntryPoints}}</h3>
         <table>
             <tr v-for="ep in state.entrypoints">
                 <td>{{ep}}</td>
-                <td><button @click="deleteEntrypoint($event, ep)">Delete</button></td>
+                <td><button @click="deleteEntrypoint($event, ep)">{{texts.btnDelete}}</button></td>
             </tr>
             <tr>
-                <td><input type="text" placeholder="New entry point"
+                <td><input type="text" :placeholder="texts.inputNewEntryPoint"
                            pattern="[a-z\d_\-]+" required
                            v-model.trim="state.newEp"
                            @input="validateNewEntrypoint"
                            :disabled="state.waitingCreateEntrypoint"
                     ></td>
-                <td><button @click="createEntrypoint(state.newEp)" :disabled="!state.newEntrypointValid || state.waitingCreateEntrypoint">Create</button></td>
+                <td><button @click="createEntrypoint(state.newEp)" :disabled="!state.newEntrypointValid || state.waitingCreateEntrypoint">{{texts.btnCreate}}</button></td>
             </tr>
         </table>
     </template>
@@ -289,7 +289,9 @@
 
     import { getApp } from "/app.js";
 
-    Vue.createApp(getApp(Vue, `<%= sid %>`)).mount('#app');
+    const app = await getApp(Vue, `<%= sid %>`);
+
+    Vue.createApp(app).mount('#app');
 </script>
 
 
