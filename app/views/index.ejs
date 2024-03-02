@@ -272,6 +272,10 @@
                 <td><button @click="createEntrypoint(state.newEp)" :disabled="!state.newEntrypointValid || state.waitingCreateEntrypoint">{{texts.btnCreate}}</button></td>
             </tr>
         </table>
+
+        <p v-if="state.instanceOwner">
+            Client time: {{state.serverTimeSync.client}} - Server time: {{state.serverTimeSync.server}}
+        </p>
     </template>
 </div>
 

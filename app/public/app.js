@@ -32,6 +32,8 @@ export async function getApp({ reactive }, sid) {
 
         admin: false,
         instanceOwner: false,
+        authToken: undefined,
+        serverTimeSync: undefined,
 
         entrypoints: [],
         newEp: ``,
@@ -121,6 +123,12 @@ export async function getApp({ reactive }, sid) {
                 state.admin = tenantPublicHex === clientPublic.toString(`hex`);
                 state.instanceOwner = headers.get(`role`) === `instanceOwner`;
                 state.authToken = authToken;
+                if (state.instanceOwner) {
+                    state.serverTimeSync = {
+                        client: new Date().toISOString(),
+                        server: new Date(headers.get(`Date`)).toISOString(),
+                    };
+                }
 
                 state.tenantPublic = X25519PublicKey.from(await sodium.sodium_hex2bin(tenantPublicHex));
                 state.clientPublic = clientPublic;
