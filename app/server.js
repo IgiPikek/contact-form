@@ -279,10 +279,14 @@ SodiumPlus.auto().then(async sodium => {
                 return res.json(convos[0]);
             }
 
-            const allIinterTenant = _session.instanceOwner
+            const allInterTenant = _session.instanceOwner
                 ? DataAccess.allInterTenantConvos()
                 : [DataAccess.interTenantConvo(_session.pk)];
-            const interTenant = allIinterTenant.find(convo => convo.id === convoId);
+            const interTenantFull = allInterTenant.find(convo => convo.id === convoId);
+            const interTenant = {
+                ...interTenantFull,
+                messages: interTenantFull.messages.filter(msg => msg.n === nonce),
+            };
 
             return res.json(interTenant);
         }
